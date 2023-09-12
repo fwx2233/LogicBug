@@ -1,0 +1,14 @@
+"""
+Main
+"""
+from learn_model import learn
+from analyse_app import analyse
+
+
+def start_main():
+    print("[+] Progrem start")
+    
+
+
+if __name__ == "__main__":
+    start_main()
