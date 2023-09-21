@@ -7,6 +7,7 @@ from analyse_app import analyse
 
 def start_main():
     print("[+] Progrem start")
+    analyse.analyse_main()
     
 
 
