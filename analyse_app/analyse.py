@@ -24,6 +24,7 @@ def scan_all_ui(apk_name) -> str:
     :return: result path
     """
     install_apk(apk_name)
+    
     pass
 
 
