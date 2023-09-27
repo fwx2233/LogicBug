@@ -6,11 +6,10 @@ from analyse_app import analyse
 
 
 def start_main():
-    print("[+] Progrem start")
+    print("[+] Program start")
     # analyse.analyse_main()
     learn.learn_main()
     
-
 
 if __name__ == "__main__":
     start_main()

@@ -19,4 +19,13 @@ Description:
 Description: 
 ```
 
-## 
+## Config file rules
+### valuable_button.conf
+```
+-button_name
+xpath:[xpath]
+activity:[activity_name]
+```
+
+## Brief use
+start appium server--input 'appium' and enter

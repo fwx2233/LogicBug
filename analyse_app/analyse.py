@@ -7,6 +7,7 @@ import json
 from xml.etree import ElementTree as et
 
 ROOT_PATH = os.path.dirname(__file__)
+SCAN_RESULT_FOLDER = ROOT_PATH + "/temp_scan_result/"
 
 
 def install_apk(apk_name):
@@ -24,8 +25,8 @@ def scan_all_ui(apk_name) -> str:
     :return: result path
     """
     install_apk(apk_name)
-    
-    pass
+
+    return "20230920183445_com.huawei.smarthome"
 
 
 def parse_scan_result(result_path) -> dict:
@@ -33,9 +34,11 @@ def parse_scan_result(result_path) -> dict:
     Get all the clickable UI in the app.
     :return: list:[ui_name]/dictionary:{ui_name: [click path]}
     """
+    # get all click test
     # transfer relative path to absolute path
-    json_result_file = ROOT_PATH + '/' + result_path + ".json"
-    result_path = ROOT_PATH + '/' + result_path + '/'
+    json_result_file = ROOT_PATH + '/temp_scan_result/' + result_path + ".json"
+    act_tg_file = SCAN_RESULT_FOLDER + "act_tg_" + result_path + ".json"
+    result_path = ROOT_PATH + '/temp_scan_result/' + result_path + '/'
     # result
     dict_result = {}
     # get all file list
@@ -92,6 +95,41 @@ def parse_scan_result(result_path) -> dict:
     # save as json file
     with open(json_result_file, "w") as f:
         json.dump(dict_result, f, indent=4)
+
+    # get activity transform graph
+    all_file_list = os.listdir(result_path)
+
+    # get png list
+    png_files = {}
+    for fil in all_file_list:
+        if fil.split('.')[-1] == "png" and fil.split('.')[-2] == "click":
+            png_files[int(fil.split('_')[0])] = fil[len(fil.split('_')[0]) + 1:]
+
+    # clear
+    all_file_list.clear()
+
+    # sort keys
+    key_sort = sorted(png_files.keys())
+    # remove start
+    key_sort = key_sort[1:]
+    # print(key_sort)
+
+    # get activity transform graph
+    tg = {}
+    last_act = ""
+    click_act = ""
+    for index in key_sort:
+        cur_act = png_files[index].split('=')[0][:-4]
+        if cur_act != last_act:
+            if last_act not in tg.keys():
+                tg[last_act] = {}
+            tg[last_act][cur_act] = str(index - 1) + '_' + png_files[index - 1]
+            last_act = cur_act
+        else:
+            pass
+
+    with open(act_tg_file, "w") as l:
+        json.dump(tg, l, indent=4)
 
     return dict_result
 
