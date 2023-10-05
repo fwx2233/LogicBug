@@ -2,12 +2,14 @@ design/
 learn_model/models/
 learn_model/packets/
 
-apks/
-
 config/
+
+apks/
 
 analyse_app/temp_scan_result/
 
 log_folder/
 
 .idea/
+
+venv/

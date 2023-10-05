@@ -78,10 +78,10 @@ def parse_scan_result(result_path) -> dict:
             dict_result[clicked_id]["xpath"] = xpath
             dict_result[clicked_id]["activity"] = activity
 
-            # get screen shot name
+            # get screenshot name
             if clicked_id in png_file_list.keys():
                 png_name = png_file_list[clicked_id]
-                dict_result[clicked_id]["png_name"] = png_name
+                dict_result[clicked_id]["png_name"] = clicked_id + "_" + png_name
                 # remove activity property from png_name
                 png_name = png_name[len(activity) + 1:-10]
                 # get info from png name
@@ -112,24 +112,25 @@ def parse_scan_result(result_path) -> dict:
     key_sort = sorted(png_files.keys())
     # remove start
     key_sort = key_sort[1:]
-    # print(key_sort)
 
     # get activity transform graph
     tg = {}
     last_act = ""
-    click_act = ""
     for index in key_sort:
         cur_act = png_files[index].split('=')[0][:-4]
         if cur_act != last_act:
             if last_act not in tg.keys():
                 tg[last_act] = {}
-            tg[last_act][cur_act] = str(index - 1) + '_' + png_files[index - 1]
+            if str(index - 1) in dict_result.keys():
+                tg[last_act][cur_act] = dict_result[str(index - 1)]["xpath"]
+            elif cur_act not in tg[last_act].keys():
+                tg[last_act][cur_act] = str(index - 1) + '_' + png_files[index - 1]
             last_act = cur_act
         else:
             pass
 
-    with open(act_tg_file, "w") as l:
-        json.dump(tg, l, indent=4)
+    with open(act_tg_file, "w") as ll:
+        json.dump(tg, ll, indent=4)
 
     return dict_result
 
@@ -139,15 +140,6 @@ def get_valuable_ui(ui_list):
     Get valuable UI from all UI list.
     :param ui_list: all UI list/dictionary
     :return: valuable UI list/dictionary
-    """
-    pass
-
-
-def send_scan_result(ui_list):
-    """
-    Send a reply to Learner to tell the scan results.
-    :param ui_list: valuable UI list
-    :return: response from Learner
     """
     pass
 
@@ -168,18 +160,15 @@ def if_terminate(ui_list):
 
 
 def analyse_main():
-    # scan all ui compoments
+    # scan all ui components
     temp_result_path = scan_all_ui("test apk")
 
     # # check if the ui_list is null
     # if_terminate(ui_list)
     dict_result = parse_scan_result(temp_result_path)
 
-    # get insteresting ui compoments
-    ui_list = get_valuable_ui(ui_list)
-
-    # check again
-    if_terminate(ui_list)
-
-    # send ui_list to learner
-    send_scan_result(ui_list)
+    # get interesting ui components
+    # ui_list = get_valuable_ui(ui_list)
+    #
+    # # check again
+    # if_terminate(ui_list)
