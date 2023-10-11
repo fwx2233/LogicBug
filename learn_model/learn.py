@@ -7,6 +7,8 @@ from appium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common import exceptions
 import time
+import socket
+import subprocess
 
 ROOT_PATH = os.path.dirname(__file__)
 PACKET_ROOT_PATH = ROOT_PATH + "/packets/"
@@ -18,7 +20,11 @@ APPIUM_IP = "http://127.0.0.1:4723/wd/hub"
 VALUABLE_BUTTON_FILE = CONF_FOLDER_PATH + "valuable_button.json"
 HOME_PAGE_ACT = "com.huawei.smarthome.activity.MainActivity"
 APK_NAME = ""
-ALPHABET_FILE = "input_bat"
+
+LOCAL_IP = ""
+LOCAL_PORT = 7009
+SERVER_IP = "192.168.50.206"
+SERVER_PORT = 7009
 
 bool_conf_name = ["noReset", "dontStopAppOnReset"]
 update_act_flag = False
@@ -49,12 +55,20 @@ def get_input_from_learner() -> str:
     return "add_device"
 
 
-def get_output(packet) -> str:
+def get_output_start(packet_name):
     """
     Get output from packet;
-    :param packet: The packet that is generated when the button is clicked.
+    :param packet_name: The packet that is generated when the button is clicked.
     :return: output
     """
+    pass
+
+
+def get_output_end():
+    pass
+
+
+def parse_packet_and_get_response(packet_name) -> str:
     pass
 
 
@@ -162,22 +176,29 @@ def back_to_home(cur_act, driver):
         exit(-1)
 
 
-def click_button(ui_name, uip_dict, driver):
+def click_button(ui_name, uip_dict, driver) -> str:
     """
     Click the button and save packets
     :param ui_name: action name that wanna be clicked
     :param uip_dict: click path dictionary of button
-    :param driver: webdriver
+    :param driver: webdriver for controling app
     :return:
     """
     if ui_name not in uip_dict.keys():
         print("[ERROR] UI which will be clicked is not in config/valuable_button.json")
+        exit(-1)
+
+    # get click path
     click_path_dict = uip_dict[ui_name]
+    # start collecting packets
+    packet_name = PACKET_ROOT_PATH + ui_name + str(time.time()) + ".pcap"
+    get_output_start(packet_name)
+    # click one by one
     for index in click_path_dict.keys():
         if "description" in click_path_dict[index].keys():
             print(index + "---" + click_path_dict[index]["description"])
         else:
-            print(index, click_path_dict[index])
+            print(index + "---" + ui_name + ": " + click_path_dict[index])
 
         # waiting for manually click
         if "waiting_time" in click_path_dict[index].keys():
@@ -199,8 +220,18 @@ def click_button(ui_name, uip_dict, driver):
                 if update_act_flag:
                     click_path_dict[index]["act_after"] = driver.current_activity
             except exceptions.NoSuchElementException:
-                flag = False
-                print("ERROR flag, no component")
+                # retry for 3 times
+                for temp_index in range(3):
+                    time.sleep(2)
+                    try:
+                        driver.find_element(By.XPATH, cur_ui_xpath).click()
+                        break
+                    except exceptions.NoSuchElementException:
+                        pass
+                print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
+                exit(-1)
+
+        # find element by resource id
         elif "resource_id" in click_path_dict[index].keys():
             cur_ui_id = click_path_dict[index]["resource_id"]
             id_index = click_path_dict[index]["rec_index"]
@@ -216,25 +247,42 @@ def click_button(ui_name, uip_dict, driver):
                 if update_act_flag:
                     click_path_dict[index]["act_after"] = driver.current_activity
             except exceptions.NoSuchElementException:
-                print("ERROR flag, no component")
-        # print current activity and check
-        time.sleep(0.2)  # wait for activity transform
+                # retry for 3 times
+                for temp_index in range(3):
+                    time.sleep(2)
+                    try:
+                        driver.find_element(By.ID, cur_ui_id).click()
+                        break
+                    except exceptions.NoSuchElementException:
+                        pass
+                print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
+                exit(-1)
+
+        # get current activity and check
+        time.sleep(0.5)  # wait for activity
         cur_activity = driver.current_activity
-        # print("====Current Activity==== ", cur_activity)
+
+    # collection end
+    get_output_end()
+
+    # parse packet and return
+    return parse_packet_and_get_response(packet_name)
 
 
-def send_alphabet(ui_list):
+def send_alphabet(ui_list, server_socket):
     """
-    Send a reply to Learner to tell the scan results.
+    Send a reply to learner to tell the scan results.
     :param ui_list: valuable UI list
+    :param server_socket: server socket to send message
     :return: response from Learner
     """
     # print log
     print("[LOG] send input_bat to learner...")
     print("input_bat---", ui_list)
 
-    # create temp file to send
-    with open(ALPHABET_FILE, "w") as f:
+    # create temp file for sending
+    alphabet_file = "input_bat"
+    with open(alphabet_file, "w") as f:
         for item in ui_list:
             if item != ui_list[-1]:
                 f.write(item + "\n")
@@ -242,31 +290,59 @@ def send_alphabet(ui_list):
                 f.write(item)
 
     # send to learner
+    try:
+        with open(alphabet_file, "rb") as f:
+            while True:
+                file_data = f.read(1024)
+                if file_data:
+                    server_socket.send(file_data)
+                else:
+                    print("[LOG] finish")
+    except Exception as e:
+        print("[ERROR] Send alphabet error: ", e)
 
     # remove temp file
     print("[LOG] remove temp file input_bat")
-    os.remove(ALPHABET_FILE)
+    os.remove(alphabet_file)
 
 
 def learn_main():
-    val_but_dict = get_valuable_button(VALUABLE_BUTTON_FILE)
+    # # get val_buttons
+    # val_but_dict = get_valuable_button(VALUABLE_BUTTON_FILE)
 
-    # send to learner
-    send_alphabet(list(val_but_dict.keys()))
+    # # create tcp socket and connect to server
+    # print("[LOG] Start connecting to server...")
+    # tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # tcp_socket.bind((LOCAL_IP, LOCAL_PORT))
+    # tcp_socket.connect((SERVER_IP, SERVER_PORT))
+    # print("[LOG] Connection build")
+    #
+    # # send alphabet to learner
+    # send_alphabet(list(val_but_dict.keys()), tcp_socket)
 
+    ## start app and get driver
     # driver = get_phone_conf_and_start_driver(PHONE_CONF_FILE)
-
-    learner_input = get_input_from_learner()
-    print("[LOG] Testing list: ", learner_input)
-
-    # if learner_input in get_input_from_learner():
+    #
+    # # start test and get input
+    # learner_input = get_input_from_learner()
+    # # print("[LOG] Testing list: ", learner_input)
+    #
+    # if learner_input in val_but_dict.keys():
     #     if APK_NAME + driver.current_activity != HOME_PAGE_ACT:
     #         back_to_home(APK_NAME + driver.current_activity, driver)
     #     print("[LOG] Click task-----" + learner_input)
-    #     click_button(learner_input, val_but_dict, driver)
-    #     # time.sleep(0.2)
+    #     click_output = click_button(learner_input, val_but_dict, driver)
+    #     response_to_learner(click_output)
+    #
+    # if update_act_flag:
+    #     # update conf
+    #     with open(VALUABLE_BUTTON_FILE, "w") as f:
+    #         json.dump(val_but_dict, f, indent=2)
 
-    if update_act_flag:
-        # update conf
-        with open(VALUABLE_BUTTON_FILE, "w") as f:
-            json.dump(val_but_dict, f, indent=2)
+    # # close android driver
+    # driver.quit()
+
+    '''
+        test
+    '''
+
