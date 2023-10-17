@@ -1,0 +1,344 @@
+{
+  "demo": {
+    "1": {
+      "xpath": "",
+      "act_before": "",
+      "act_after": "",
+      "waiting_time": 0,
+      "description": ""
+    }
+  },
+  "add_scene": {
+    "1": {
+      "resource_id": "com.huawei.smarthome:id/iv_deviceadd",
+      "rec_index": 0,
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click add button in home page"
+    },
+    "2": {
+      "xpath": "//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.LinearLayout[@resource-id='com.huawei.smarthome:id/tv_add_ifttt' and @class='android.widget.LinearLayout']//android.widget.TextView[@resource-id='com.huawei.smarthome:id/tv_add_ifttt_text' and @text='Add scene' and @class='android.widget.TextView']",
+      "act_before": ".activity.MainActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "click add scene button"
+    },
+    "3": {
+      "xpath": "//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.LinearLayout[@resource-id='com.huawei.smarthome:id/action_bar_root' and @class='android.widget.LinearLayout']//android.widget.FrameLayout[@resource-id='android:id/content' and @class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.RelativeLayout[@resource-id='com.huawei.smarthome:id/container' and @class='android.widget.RelativeLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.FrameLayout[@resource-id='com.huawei.smarthome:id/flt_scene_create' and @class='android.widget.FrameLayout']//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.RelativeLayout[@class='android.widget.RelativeLayout']//androidx.recyclerview.widget.RecyclerView[@resource-id='com.huawei.smarthome:id/rcv_create' and @class='androidx.recyclerview.widget.RecyclerView']//android.widget.RelativeLayout[@resource-id='com.huawei.smarthome:id/parent_add_action' and @class='android.widget.RelativeLayout']//android.widget.LinearLayout[@resource-id='com.huawei.smarthome:id/ll_create_add_action_item' and @class='android.widget.LinearLayout']//android.widget.TextView[@resource-id='com.huawei.smarthome:id/tv_create_add_action_text' and @text='Add task' and @class='android.widget.TextView']",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "click add task"
+    },
+    "4": {
+      "xpath": "//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.FrameLayout[@class='android.widget.FrameLayout']//android.widget.LinearLayout[@resource-id='com.huawei.smarthome:id/action_bar_root' and @class='android.widget.LinearLayout']//android.widget.FrameLayout[@resource-id='android:id/content' and @class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.RelativeLayout[@resource-id='com.huawei.smarthome:id/container' and @class='android.widget.RelativeLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//android.widget.FrameLayout[@resource-id='com.huawei.smarthome:id/flt_scene_create' and @class='android.widget.FrameLayout']//android.widget.LinearLayout[@class='android.widget.LinearLayout']//androidx.recyclerview.widget.RecyclerView[@resource-id='com.huawei.smarthome:id/recycler' and @class='androidx.recyclerview.widget.RecyclerView']//android.widget.RelativeLayout[@resource-id='com.huawei.smarthome:id/rl_item_layout' and @class='android.widget.RelativeLayout']//android.widget.ImageView[@resource-id='com.huawei.smarthome:id/create_add_trigger_item_click_icon' and @class='android.widget.ImageView']",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "click smart devices"
+    },
+    "5": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.FrameLayout/android.view.ViewGroup/android.widget.LinearLayout/androidx.recyclerview.widget.RecyclerView/android.widget.LinearLayout/android.widget.RelativeLayout/android.widget.ImageView",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "select first device(smart chint)"
+    },
+    "6": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.RelativeLayout[1]/android.widget.LinearLayout/android.widget.RadioButton",
+      "act_before": "com.huawei.hiscenario.create.devicecapablity.AddActionActivity",
+      "act_after": "com.huawei.hiscenario.create.devicecapablity.AddActionActivity",
+      "description": "click on"
+    },
+    "7": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.RelativeLayout/android.widget.Button",
+      "act_before": "com.huawei.hiscenario.create.devicecapablity.AddActionActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "click next button on the bottom"
+    },
+    "8": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.LinearLayout[3]/android.widget.LinearLayout/android.widget.ImageView",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "description": "click add condition"
+    },
+    "9": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.RelativeLayout[4]",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "description": "click schedule"
+    },
+    "10": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.RelativeLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.LinearLayout/androidx.recyclerview.widget.RecyclerView/android.widget.RelativeLayout/android.widget.TextView",
+      "act_before": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "act_after": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "description": "add time"
+    },
+    "11": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.view.ViewGroup/android.widget.FrameLayout/android.view.ViewGroup/android.widget.RelativeLayout[1]/android.widget.LinearLayout/android.widget.RelativeLayout/android.widget.ImageButton[2]",
+      "act_before": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "act_after": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "description": "select current time, and done"
+    },
+    "12": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout[2]/android.widget.RelativeLayout/android.widget.Button",
+      "act_before": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "act_after": "com.huawei.hiscenario.create.basecapability.specifictime.SpecificTimeActivity",
+      "description": "click next"
+    },
+    "13": {
+      "xpath": "//android.widget.Button[@content-desc='Done']",
+      "act_before": "com.huawei.hiscenario.create.SceneCreateActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click done"
+    },
+    "14": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.LinearLayout[1]/android.widget.LinearLayout/android.widget.TextView",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "back to HOME"
+    }
+  },
+  "add_device": {
+    "1": {
+      "xpath": "//android.widget.ImageView[@content-desc='Add']",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click add button"
+    },
+    "2": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout[1]",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click 'Add device'"
+    },
+    "3": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.ListView/android.widget.LinearLayout[1]/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.RelativeLayout/android.widget.Button",
+      "act_before": ".deviceadd.ui.activity.AddDeviceScanActivity",
+      "act_after": ".deviceadd.ui.activity.AddDeviceWifiSettingActivity",
+      "description": "waiting for scanning and click connect",
+      "waiting_time": 8
+    },
+    "4": {
+      "waiting_time": 30,
+      "description": "======== Please click 'connect' manually ======="
+    },
+    "5": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.ScrollView/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.TextView[1]",
+      "act_before": ".deviceadd.ui.activity.AddDeviceInfoSettingActivity",
+      "act_after": ".deviceadd.ui.activity.AddDeviceInfoSettingActivity",
+      "description": "select first room"
+    },
+    "6": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.LinearLayout[2]/android.widget.Button",
+      "act_before": ".deviceadd.ui.activity.AddDeviceInfoSettingActivity",
+      "act_after": ".deviceadd.ui.activity.AddDeviceSharedGuideActivity",
+      "description": "OK"
+    },
+    "7": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.LinearLayout[2]/android.widget.Button",
+      "act_before": ".deviceadd.ui.activity.AddDeviceSharedGuideActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "done"
+    },
+    "8": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup",
+      "act_before": ".activity.MainActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.DeviceVoiceControlGuideActivity",
+      "waiting_time": 0,
+      "description": "click the 1st device card in home page"
+    },
+    "9": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.Button",
+      "act_before": "com.huawei.app.devicecontrol.activity.devices.DeviceVoiceControlGuideActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.DeviceH5CommonActivity",
+      "waiting_time": 0,
+      "description": "click OK"
+    },
+    "10": {
+      "xpath": "//android.widget.RelativeLayout[@content-desc='Previous']/android.widget.ImageView",
+      "act_before": "com.huawei.app.devicecontrol.activity.devices.DeviceH5CommonActivity",
+      "act_after": ".activity.MainActivity",
+      "waiting_time": 0,
+      "description": "back to home"
+    }
+  },
+  "share_device": {
+    "1": {
+      "xpath": "//android.widget.ImageView[@content-desc='Add']",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click add button"
+    },
+    "2": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout[3]",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".family.activity.SharedDeviceSelectActivity",
+      "description": "select share device"
+    },
+    "3": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.CheckBox",
+      "act_before": ".family.activity.SharedDeviceSelectActivity",
+      "act_after": ".family.activity.SharedDeviceSelectActivity",
+      "description": "select first device"
+    },
+    "4": {
+      "xpath": "//android.widget.ImageView[@content-desc='OK']",
+      "act_before": ".family.activity.SharedDeviceSelectActivity",
+      "act_after": ".family.activity.ChoiceSharedMemberActivity",
+      "description": "OK"
+    },
+    "5": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout[2]/android.widget.LinearLayout[1]/android.widget.RelativeLayout[2]/android.widget.ImageView",
+      "act_before": ".family.activity.ChoiceSharedMemberActivity",
+      "act_after": ".family.activity.ShareSelectAccountActivity",
+      "description": "share by huawei id"
+    },
+    "6": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.ImageView",
+      "act_before": ".family.activity.ShareSelectAccountActivity",
+      "act_after": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
+      "description": "select in contact"
+    },
+    "7": {
+      "xpath": "//android.widget.TextView[@content-desc='Test1']",
+      "act_before": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
+      "act_after": ".family.activity.SharedPhoneMemberInfoActivity",
+      "description": "select user 1 for test"
+    },
+    "8": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout[3]/android.widget.Button[2]",
+      "act_before": ".family.activity.SharedPhoneMemberInfoActivity",
+      "act_after": ".family.activity.SharedPhoneMemberInfoActivity",
+      "description": "click share button"
+    }
+  },
+  "scan": {},
+  "link_accounts": {},
+  "view_device1's_status": {
+    "1": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup",
+      "act_before": ".activity.MainActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.DeviceH5CommonActivity",
+      "description": "click the 1st device card in home page"
+    }
+  },
+  "invite_user": {
+    "1": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout/android.widget.LinearLayout",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click 'Home' list"
+    },
+    "2": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.RelativeLayout[1]/android.widget.ImageView",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.HomeListActivity",
+      "description": "Home setting"
+    },
+    "3": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.ScrollView/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.LinearLayout[1]/android.widget.RelativeLayout/android.widget.ImageView",
+      "act_before": ".activity.HomeListActivity",
+      "act_after": ".homepage.activity.HomeManageActivity",
+      "description": "click the 1st Home (my home)"
+    },
+    "4": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.GridView/android.widget.LinearLayout[last()]/android.widget.RelativeLayout",
+      "act_before": ".homepage.activity.HomeManageActivity",
+      "act_after": ".family.activity.ChoiceSharedMemberActivity",
+      "description": "add member"
+    },
+    "5": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout[2]/android.widget.LinearLayout[1]/android.widget.RelativeLayout[2]/android.widget.ImageView",
+      "act_before": ".family.activity.ChoiceSharedMemberActivity",
+      "act_after": ".family.activity.ShareSelectAccountActivity",
+      "description": "share by huawei id"
+    },
+    "6": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.RelativeLayout[2]/android.widget.LinearLayout/android.widget.ImageView",
+      "act_before": ".family.activity.ShareSelectAccountActivity",
+      "act_after": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
+      "description": "select in contact"
+    },
+    "7": {
+      "xpath": "//android.widget.TextView[@content-desc='user1']",
+      "act_before": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
+      "act_after": ".family.activity.ChoiceSharedMemberActivity",
+      "description": "select user1 for test"
+    },
+    "8": {
+      "xpath": "//android.widget.ImageView[@content-desc='OK']",
+      "act_before": ".family.activity.ChoiceSharedMemberActivity",
+      "act_after": ".family.activity.ChoiceSharedMemberActivity",
+      "description": "click OK"
+    }
+  },
+  "unshare": {
+    "1": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout/android.widget.LinearLayout",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "click 'Home' list"
+    },
+    "2": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.RelativeLayout[1]/android.widget.ImageView",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.HomeListActivity",
+      "description": "Home setting"
+    },
+    "3": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.ScrollView/android.widget.RelativeLayout/androidx.recyclerview.widget.RecyclerView/android.widget.LinearLayout[1]/android.widget.RelativeLayout/android.widget.ImageView",
+      "act_before": ".activity.HomeListActivity",
+      "act_after": ".homepage.activity.HomeManageActivity",
+      "description": "click the 1st Home (my home)"
+    },
+    "4": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.GridView/android.widget.LinearLayout[2]/android.widget.RelativeLayout",
+      "act_before": ".homepage.activity.HomeManageActivity",
+      "act_after": ".house.activity.HouseMemberDetailActivity",
+      "description": "select second member"
+    },
+    "5": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout[3]/android.widget.Button",
+      "act_before": ".house.activity.HouseMemberDetailActivity",
+      "act_after": ".house.activity.HouseMemberDetailActivity",
+      "description": "click 'remove' button"
+    },
+    "6": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.TextView[2]",
+      "act_before": ".house.activity.HouseMemberDetailActivity",
+      "act_after": ".house.activity.HouseMemberDetailActivity",
+      "description": "click 'REMOVE' again for sure"
+    }
+  },
+  "remove_device": {
+    "1": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup",
+      "act_before": ".activity.MainActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.DeviceH5CommonActivity",
+      "description": "click the 1st device card in home page"
+    },
+    "2": {
+      "xpath": "//android.widget.RelativeLayout[@content-desc='Settings']/android.widget.ImageView",
+      "act_before": "com.huawei.app.devicecontrol.activity.devices.DeviceH5CommonActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.SocketSettingActivity",
+      "description": "device settings"
+    },
+    "3": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.ScrollView/android.widget.LinearLayout/android.widget.FrameLayout[1]/android.widget.LinearLayout/android.widget.RelativeLayout[5]/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.ImageView",
+      "act_before": "com.huawei.app.devicecontrol.activity.devices.SocketSettingActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.SocketSettingActivity",
+      "description": "remove device"
+    },
+    "4": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout/android.widget.LinearLayout[3]/android.widget.TextView[2]",
+      "act_before": "com.huawei.app.devicecontrol.activity.devices.SocketSettingActivity",
+      "act_after": "com.huawei.app.devicecontrol.activity.devices.SocketSettingActivity",
+      "description": "remove(double check)"
+    }
+  },
+  "device_off_and_on": {
+    "1": {
+      "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout[3]/android.widget.FrameLayout",
+      "act_before": ".activity.MainActivity",
+      "act_after": ".activity.MainActivity",
+      "description": "turn off/on the device"
+    }
+  }
+}

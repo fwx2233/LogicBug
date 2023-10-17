@@ -1,0 +1,9 @@
+{
+    "platformName": "Android",
+    "deviceName": "nexus",
+    "appPackage": "com.huawei.smarthome",
+    "appActivity": ".login.LauncherActivity",
+    "udid": "5VT7N15A29000275",
+    "noReset": "True",
+    "dontStopAppOnReset": "True"
+}
