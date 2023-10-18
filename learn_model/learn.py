@@ -59,6 +59,10 @@ class LearnCls:
         self.SERVER_IP = "127.0.0.1"
         self.SERVER_PORT = 9999
         self.SOCKET = ""
+        self.MESSAGE_BYTE = 32
+        self.SYSTEM_MESSAGE = 0
+        self.LEARNLIB_MESSAGE = 1
+        self.QUERY_MESSAGE = 2
 
         # test flag and other info
         self.update_act_flag = False
@@ -188,11 +192,13 @@ class LearnCls:
             return "device_off_and_on"
         else:
             # communicate with the server
-            message = self.SOCKET.recv(1024)
+            message = self.SOCKET.recv(self.MESSAGE_BYTE)
             message_type = message[0]
             context = message[1:].decode('utf-8')
-            if message_type == 1:
-                print("[LOG] Receive input: " + context)
+            if message_type == self.SYSTEM_MESSAGE:
+                print("[LOG] Receive system message: " + context)
+            elif message_type == self.LEARNLIB_MESSAGE:
+                print("[LOG] Receive learnlib message: " + context)
                 '''
                 '''
                 # Add the response to Reset, which needs to be deleted later
@@ -200,8 +206,10 @@ class LearnCls:
                     self.SOCKET.sendall(bytes([message_type]) + "Reset has received".encode('utf-8'))
                 '''
                 '''
+            elif message_type == self.QUERY_MESSAGE:
+                print("[LOG] Receive query message: " + context)
             else:
-                print("[ERROR] Don't receive input message")
+                print("[ERROR] Receive a message of the wrong type")
             return context
 
     def get_output_start(self, packet_name):
@@ -218,13 +226,14 @@ class LearnCls:
     def parse_packet_and_get_response(self, packet_name) -> str:
         pass
 
-    def response_to_learner(self, output):
+    def response_to_learner(self, message_type, output):
         """
         Tell the learner the output of operation.
+        :param message_type:
         :param output:
         :return:
         """
-        reply_message = bytes([1]) + output.encode('utf-8')
+        reply_message = bytes([message_type]) + output.encode('utf-8')
         self.SOCKET.sendall(reply_message)
 
     def dfs_search(self, act1, act2):
@@ -420,27 +429,26 @@ class LearnCls:
         """
         Send a reply to learner to tell the scan results.
         :param ui_list: valuable UI list
-        :param server_socket: server socket to send message
         :return: response from Learner
         """
         # print log
-        print("[LOG] send input_bat to learner...")
+        print("[LOG] Load the alphabet file for the learner...")
         print("input_bat---", ui_list)
 
         # communicate with the server
-        message = self.SOCKET.recv(1024)
+        message = self.SOCKET.recv(self.MESSAGE_BYTE)
         message_type = message[0]
         context = message[1:].decode('utf-8')
-        if message_type == 0 and context == "alphabet":
+        if message_type == self.SYSTEM_MESSAGE and context == "Alphabet request":
             print("[LOG] Receive alphabet send request")
 
             # Send reply message
-            reply_context = "Succeed!"
-            reply_message = bytes([message_type]) + reply_context.encode('utf-8')
+            reply_context = "Load successfully!"
+            reply_message = bytes([self.SYSTEM_MESSAGE]) + reply_context.encode('utf-8')
             self.SOCKET.sendall(reply_message)
             print("[LOG] Send reply message")
         else:
-            print("[ERROR] Don't receive alphabet send request")
+            print("[ERROR] Receive wrong message")
 
         # create file for alphabet
         alphabet_file = self.LEARNLIB_FOLDER + "src/main/resources/input_bat"
@@ -453,9 +461,9 @@ class LearnCls:
         print("[LOG] Create the alphabet file input_bat")
 
         # print("[DEBUG] Test function get_input_from_learner(server_socket)")
-        self.get_input_from_learner()
+        # self.get_input_from_learner()
         # print("[DEBUG] Test function response_to_learner(output, server_socket)")
-        self.response_to_learner(self.get_input_from_learner() + "_suc")
+        # self.response_to_learner(self.QUERY_MESSAGE, self.get_input_from_learner() + "_suc")
 
 
 def learn_main():
@@ -493,7 +501,7 @@ def learn_main():
                 with open(learn_entity.VALUABLE_BUTTON_FILE, "w") as f:
                     json.dump(val_but_dict, f, indent=2)
 
-            # learn_entity.response_to_learner(click_output)
+            # learn_entity.response_to_learner(learn_entity.QUERY_MESSAGE, click_output)
 
         else:
             break

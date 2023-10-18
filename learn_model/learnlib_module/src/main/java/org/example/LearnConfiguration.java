@@ -76,7 +76,7 @@ public class LearnConfiguration {
             aM = new AlphabetManager(alphabetFile);
             return true;
         } else {
-            LogManager.logger.logEvent("字符表文件不存在");
+            LogManager.logger.logEvent("The alphabet file hasn't existed");
             return false;
         }
     }

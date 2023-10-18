@@ -5,13 +5,17 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
 
 public class NetworkManager {
     ServerSocket serverSocket;
     Socket clientSocket;
     OutputStream out;
     InputStream in;
+    static int TYPE_LENGTH = 1;
+    static int SYSTEM_MESSAGE = 0;
+    static int LEARNLIB_MESSAGE = 1;
+    static int QUERY_MESSAGE = 2;
+    static int MESSAGE_BYTE = 32;
     public NetworkManager(LearnConfiguration conf) throws IOException {
         try {
             serverSocket = new ServerSocket(conf.port);
@@ -33,12 +37,16 @@ public class NetworkManager {
         sendAlphabetRequest();
     }
 
-    public String sendQuery(String query) throws IOException {
-        return new String(sendMessage(1, query));
+    private void sendAlphabetRequest() throws IOException {
+        sendMessage(SYSTEM_MESSAGE, "Alphabet request");
     }
 
-    private void sendAlphabetRequest() throws IOException {
-        sendMessage(0, "alphabet");
+    public void sendLearnLibMessage(String content) throws IOException {
+        sendMessage(LEARNLIB_MESSAGE, content);
+    }
+
+    public String sendQuery(String query) throws IOException {
+        return new String(sendMessage(QUERY_MESSAGE, query));
     }
 
     private byte[] sendMessage(int type, String message) throws IOException {
@@ -46,13 +54,13 @@ public class NetworkManager {
         byte[] messageBytes = message.getBytes();
 
         // Splice
-        byte[] totalBytes = new byte[typeByte.length + messageBytes.length];
-        System.arraycopy(typeByte, 0, totalBytes, 0, typeByte.length);
-        System.arraycopy(messageBytes, 0, totalBytes, typeByte.length, messageBytes.length);
+        byte[] totalBytes = new byte[TYPE_LENGTH + messageBytes.length];
+        System.arraycopy(typeByte, 0, totalBytes, 0, TYPE_LENGTH);
+        System.arraycopy(messageBytes, 0, totalBytes, TYPE_LENGTH, messageBytes.length);
 
         // Send message to client
         out.write(totalBytes);
-//        LogManager.logger.logEvent(Arrays.toString(totalBytes));
+        LogManager.logger.logEvent("Message: " + message);
 
         if (type == 0)
             LogManager.logger.logEvent("Sent successfully!");
@@ -60,25 +68,31 @@ public class NetworkManager {
         return receiveMessage(type);
     }
 
-    private byte[] receiveMessage(int type) throws IOException {
+    private byte[] receiveMessage(int sendMessageType) throws IOException {
         // Read byte array
-        byte[] receiveMessage = new byte[1024];
+        byte[] receiveMessage = new byte[MESSAGE_BYTE];
         int bytesReceive = in.read(receiveMessage);
 
-        byte receiveType = receiveMessage[0];
-        byte[] messageBytes = new byte[bytesReceive - 1];
-        System.arraycopy(receiveMessage, 1, messageBytes, 0, bytesReceive - 1);
-        String message = new String(messageBytes);//LogManager.logger.logEvent(message);
+        byte receiveMessageType = receiveMessage[0];
+        int bytesContent = bytesReceive - TYPE_LENGTH;
+        byte[] contentBytes = new byte[bytesContent];
+        System.arraycopy(receiveMessage, TYPE_LENGTH, contentBytes, 0, bytesContent);
+        String message = new String(contentBytes);
 
-        if (type == 0 && (int)receiveType == 0) {
-            // TODO 当消息发送和接收类型都与字符表相关，对字符串进行判断
-            if (message.equals("Succeed!")) {
-                LogManager.logger.logEvent(message);
+        if (sendMessageType == SYSTEM_MESSAGE && (int)receiveMessageType == sendMessageType) {
+            if (message.equals("Load successfully!")) {
+                LogManager.logger.logEvent("System message: " + message);
+            } else {
+                LogManager.logger.logEvent("Other system message: " + message);
             }
-        } else if (type == 1) {
+        } else if (sendMessageType == LEARNLIB_MESSAGE && (int)receiveMessageType == sendMessageType) {
+            LogManager.logger.logEvent("LearnLib message: " + message);
+        } else if (sendMessageType == QUERY_MESSAGE && (int)receiveMessageType == sendMessageType) {
             LogManager.logger.logEvent("Response: " + message);
+        } else {
+            LogManager.logger.logEvent("Unexpected response: " + message);
         }
 
-        return messageBytes;
+        return contentBytes;
     }
 }

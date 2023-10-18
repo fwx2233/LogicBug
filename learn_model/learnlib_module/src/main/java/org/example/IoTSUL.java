@@ -16,12 +16,11 @@ public class IoTSUL implements SUL<String, String> {
         return alphabet;
     }
 
-    // 重写SUL接口函数，推动系统向下运行
+    // Override function for query
     @Override
     public String step(String symbol) {
         String result = null;
         try {
-            // TODO 处理字符函数，需要使用 Socket 交互模块
             result = network.sendQuery(symbol);
             LogManager.logger.logQuery("Step: " + symbol + " - Result: " + result);
         } catch (Exception e) {
@@ -29,18 +28,17 @@ public class IoTSUL implements SUL<String, String> {
         }
         return result;
     }
-    // 重写SUL接口函数，初始化目标系统
+    // Override function for initialization
     @Override
     public void pre() {
         try {
-            // TODO 重置 Reset 函数
-            network.sendQuery("Reset");
+            network.sendLearnLibMessage("Reset");
         } catch (Exception e) {
             LogManager.logger.logEvent("Reset fail");
             throw new RuntimeException(e);
         }
     }
-    // 重写SUL接口函数，结束目标系统
+    // Override function for ending
     @Override
     public void post() {
     }

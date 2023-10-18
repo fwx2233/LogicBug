@@ -21,7 +21,6 @@ public class Learner {
     LearnConfiguration config;
     IoTSUL sul;
     NetworkManager network;
-    // TODO 字母表的对比与筛选
     GrowingMapAlphabet<String> alphabet;
     StatisticSUL<String, String> statisticMqSul;
     StatisticSUL<String, String> statisticEqSul;
@@ -37,11 +36,11 @@ public class Learner {
         this.config = config;
         this.network = network;
 
-        // 构建 SUL 和字符表
+        // Build SUL and alphabet
         sul = new IoTSUL(this.config, this.network);
         alphabet = sul.getAlphabet();
 
-        // 配置学习算法和一致性检测方法
+        // Configure Algorithms
         initAlgorithm();
     }
 

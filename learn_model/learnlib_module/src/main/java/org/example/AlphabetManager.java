@@ -12,17 +12,11 @@ public class AlphabetManager {
         words = new ArrayList<>();
 
         try {
-            // 创建一个BufferedReader来读取文件
             BufferedReader reader = new BufferedReader(new FileReader(alphabetFile));
-
             String alphabet;
-
-            // 逐行读取文件内容并存入List
             while ((alphabet = reader.readLine()) != null) {
                 words.add(alphabet);
             }
-
-            // 关闭文件读取器
             reader.close();
         } catch (IOException e) {
             LogManager.logger.logEvent(String.valueOf(e));
