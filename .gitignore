@@ -1,6 +1,9 @@
 design/
 learn_model/models/
 learn_model/packets/
+learn_model/learnlib_module/.idea/
+learn_model/learnlib_module/result/
+learn_model/learnlib_module/target/
 
 #config/
 

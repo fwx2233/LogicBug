@@ -11,6 +11,9 @@ import socket
 import subprocess
 
 
+manually_flag = True
+
+
 class LearnCls:
     def __init__(self):
         # paths
@@ -18,6 +21,7 @@ class LearnCls:
         self.PACKET_ROOT_PATH = self.ROOT_PATH + "/packets/"
         self.CONF_FOLDER_PATH = self.ROOT_PATH + "/../config/"
         self.SCRIPTS_FOLDER = self.ROOT_PATH + "/../scripts/"
+        self.LEARNLIB_FOLDER = self.ROOT_PATH + "/learnlib_module/"
         self.ACT_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/act_tg.json"
         self.ADD_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/additional_tg.json"
         self.PHONE_CONF_FILE = self.CONF_FOLDER_PATH + "device.json"
@@ -52,8 +56,9 @@ class LearnCls:
         # communication information
         self.LOCAL_IP = ""
         self.LOCAL_PORT = 7009
-        self.SERVER_IP = "192.168.50.206"
-        self.SERVER_PORT = 7009
+        self.SERVER_IP = "127.0.0.1"
+        self.SERVER_PORT = 9999
+        self.SOCKET = ""
 
         # test flag and other info
         self.update_act_flag = False
@@ -68,7 +73,8 @@ class LearnCls:
         if not os.path.exists(self.PACKET_ROOT_PATH):
             os.mkdir(self.PACKET_ROOT_PATH)
         self.cur_packet_name = self.PACKET_ROOT_PATH + action_name + '_' + str(int(time.time())) + ".pcapng"
-        a = subprocess.Popen(["sudo", "-S", "tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_name], stdin=admin_proc.stdout)
+        a = subprocess.Popen(["sudo", "-S", "tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_name],
+                             stdin=admin_proc.stdout)
 
         # kill mitm
         self.kill_mitm()
@@ -170,8 +176,33 @@ class LearnCls:
 
         return result
 
+    def create_socket(self):
+        print("[LOG] Start connecting to server...")
+        self.SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.SOCKET.bind((self.LOCAL_IP, self.LOCAL_PORT))
+        self.SOCKET.connect((self.SERVER_IP, self.SERVER_PORT))
+        print("[LOG] Connection build")
+
     def get_input_from_learner(self) -> str:
-        return "add_device"
+        if manually_flag:
+            return "device_off_and_on"
+        else:
+            # communicate with the server
+            message = self.SOCKET.recv(1024)
+            message_type = message[0]
+            context = message[1:].decode('utf-8')
+            if message_type == 1:
+                print("[LOG] Receive input: " + context)
+                '''
+                '''
+                # Add the response to Reset, which needs to be deleted later
+                if context == "Reset":
+                    self.SOCKET.sendall(bytes([message_type]) + "Reset has received".encode('utf-8'))
+                '''
+                '''
+            else:
+                print("[ERROR] Don't receive input message")
+            return context
 
     def get_output_start(self, packet_name):
         """
@@ -193,7 +224,8 @@ class LearnCls:
         :param output:
         :return:
         """
-        pass
+        reply_message = bytes([1]) + output.encode('utf-8')
+        self.SOCKET.sendall(reply_message)
 
     def dfs_search(self, act1, act2):
         """
@@ -271,7 +303,6 @@ class LearnCls:
             valuable_button_click_path = json.load(f)
 
         return valuable_button_click_path
-
 
     def back_to_home(self, cur_act, driver):
         # find path
@@ -385,42 +416,46 @@ class LearnCls:
         # parse packet and return
         return self.parse_packet_and_get_response(packet_name)
 
+    def load_alphabet(self, ui_list):
+        """
+        Send a reply to learner to tell the scan results.
+        :param ui_list: valuable UI list
+        :param server_socket: server socket to send message
+        :return: response from Learner
+        """
+        # print log
+        print("[LOG] send input_bat to learner...")
+        print("input_bat---", ui_list)
 
-def send_alphabet(ui_list, server_socket):
-    """
-    Send a reply to learner to tell the scan results.
-    :param ui_list: valuable UI list
-    :param server_socket: server socket to send message
-    :return: response from Learner
-    """
-    # print log
-    print("[LOG] send input_bat to learner...")
-    print("input_bat---", ui_list)
+        # communicate with the server
+        message = self.SOCKET.recv(1024)
+        message_type = message[0]
+        context = message[1:].decode('utf-8')
+        if message_type == 0 and context == "alphabet":
+            print("[LOG] Receive alphabet send request")
 
-    # create temp file for sending
-    alphabet_file = "input_bat"
-    with open(alphabet_file, "w") as f:
-        for item in ui_list:
-            if item != ui_list[-1]:
-                f.write(item + "\n")
-            else:
-                f.write(item)
+            # Send reply message
+            reply_context = "Succeed!"
+            reply_message = bytes([message_type]) + reply_context.encode('utf-8')
+            self.SOCKET.sendall(reply_message)
+            print("[LOG] Send reply message")
+        else:
+            print("[ERROR] Don't receive alphabet send request")
 
-    # send to learner
-    try:
-        with open(alphabet_file, "rb") as f:
-            while True:
-                file_data = f.read(1024)
-                if file_data:
-                    server_socket.send(file_data)
+        # create file for alphabet
+        alphabet_file = self.LEARNLIB_FOLDER + "src/main/resources/input_bat"
+        with open(alphabet_file, "w") as f:
+            for item in ui_list:
+                if item != ui_list[-1]:
+                    f.write(item + "\n")
                 else:
-                    print("[LOG] finish")
-    except Exception as e:
-        print("[ERROR] Send alphabet error: ", e)
+                    f.write(item)
+        print("[LOG] Create the alphabet file input_bat")
 
-    # remove temp file
-    print("[LOG] remove temp file input_bat")
-    os.remove(alphabet_file)
+        # print("[DEBUG] Test function get_input_from_learner(server_socket)")
+        self.get_input_from_learner()
+        # print("[DEBUG] Test function response_to_learner(output, server_socket)")
+        self.response_to_learner(self.get_input_from_learner() + "_suc")
 
 
 def learn_main():
@@ -429,37 +464,39 @@ def learn_main():
     # get val_buttons
     val_but_dict = learn_entity.get_valuable_button(learn_entity.VALUABLE_BUTTON_FILE)
 
-    # # create tcp socket and connect to server
-    # print("[LOG] Start connecting to server...")
-    # tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # tcp_socket.bind((learn_entity.LOCAL_IP, LOCAL_PORT))
-    # tcp_socket.connect((SERVER_IP, SERVER_PORT))
-    # print("[LOG] Connection build")
+    if not manually_flag:
+        # create tcp socket and connect to server
+        learn_entity.create_socket()
 
-    # # send alphabet to learner
-    # send_alphabet(list(val_but_dict.keys()), tcp_socket)
+        # send alphabet to learner
+        learn_entity.load_alphabet(list(val_but_dict.keys()))
 
     # start app and get driver
     driver = learn_entity.get_phone_conf_and_start_driver(learn_entity.PHONE_CONF_FILE)
 
-    # start test and get input
-    learner_input = learn_entity.get_input_from_learner()
+    while True:
+        # start test and get input
+        learner_input = learn_entity.get_input_from_learner()
 
-    if learner_input in val_but_dict.keys():
-        if learn_entity.APK_NAME + driver.current_activity != learn_entity.HOME_PAGE_ACT:
-            learn_entity.back_to_home(learn_entity.APK_NAME + driver.current_activity, driver)
-        print("[LOG] Click task-----" + learner_input)
-        learn_entity.start_tshark(learner_input)
-        time.sleep(5)
-        click_output = learn_entity.click_button(learner_input, val_but_dict, driver)
-        time.sleep(5)
-        learn_entity.stop_tshark()
-        # learn_entity.response_to_learner(click_output)
+        if learner_input in val_but_dict.keys():
+            if learn_entity.APK_NAME + driver.current_activity != learn_entity.HOME_PAGE_ACT:
+                learn_entity.back_to_home(learn_entity.APK_NAME + driver.current_activity, driver)
+            print("[LOG] Click task-----" + learner_input)
+            learn_entity.start_tshark(learner_input)
+            time.sleep(5)
+            click_output = learn_entity.click_button(learner_input, val_but_dict, driver)
+            time.sleep(5)
+            learn_entity.stop_tshark()
 
-    # if update_act_flag:
-    #     # update conf
-    #     with open(VALUABLE_BUTTON_FILE, "w") as f:
-    #         json.dump(val_but_dict, f, indent=2)
+            if learn_entity.update_act_flag:
+                # update conf
+                with open(learn_entity.VALUABLE_BUTTON_FILE, "w") as f:
+                    json.dump(val_but_dict, f, indent=2)
+
+            # learn_entity.response_to_learner(click_output)
+
+        else:
+            break
 
     # close android driver and shutdown frida
     driver.quit()

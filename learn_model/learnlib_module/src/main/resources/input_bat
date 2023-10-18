@@ -1,0 +1,8 @@
+add_scene
+add_device
+share_device
+view_device1's_status
+invite_user
+delete_user
+remove_device
+device_off_and_on

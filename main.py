@@ -6,10 +6,10 @@ from analyse_app import analyse
 
 
 def start_main():
-    print("[+] Program start")
-
-    print("[+] Start analysing appcrawler result")
-    analyse.analyse_main()
+    # print("[+] Program start")
+    #
+    # print("[+] Start analysing appcrawler result")
+    # analyse.analyse_main()
 
     print("[+] Start learn model")
     learn.learn_main()
