@@ -15,15 +15,15 @@ manually_flag = True
 
 
 class LearnCls:
-    def __init__(self):
+    def __init__(self, scan_folder_name):
         # paths
         self.ROOT_PATH = os.path.dirname(__file__)
         self.PACKET_ROOT_PATH = self.ROOT_PATH + "/packets/"
         self.CONF_FOLDER_PATH = self.ROOT_PATH + "/../config/"
         self.SCRIPTS_FOLDER = self.ROOT_PATH + "/../scripts/"
         self.LEARNLIB_FOLDER = self.ROOT_PATH + "/learnlib_module/"
-        self.ACT_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/act_tg.json"
-        self.ADD_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/additional_tg.json"
+        self.ACT_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/act_tg_" + scan_folder_name + ".json"
+        self.ADD_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/additional_tg_" + scan_folder_name + ".json"
         self.PHONE_CONF_FILE = self.CONF_FOLDER_PATH + "device.json"
         self.VALUABLE_BUTTON_FILE = self.CONF_FOLDER_PATH + "valuable_button.json"
 
@@ -183,9 +183,10 @@ class LearnCls:
         self.SOCKET.connect((self.SERVER_IP, self.SERVER_PORT))
         print("[LOG] Connection build")
 
-    def get_input_from_learner(self) -> str:
+    def get_input_from_learner(self):
         if manually_flag:
-            return "device_off_and_on"
+            # return ["view_device1's_status", "invite_user", "device_off_and_on", "remove_device", "add_device"]
+            return ["view_device1's_status", "invite_user", "device_off_and_on", "add_scene"]
         else:
             # communicate with the server
             message = self.SOCKET.recv(1024)
@@ -203,17 +204,6 @@ class LearnCls:
             else:
                 print("[ERROR] Don't receive input message")
             return context
-
-    def get_output_start(self, packet_name):
-        """
-        Get output from packet;
-        :param packet_name: The packet that is generated when the button is clicked.
-        :return: output
-        """
-        pass
-
-    def get_output_end(self):
-        pass
 
     def parse_packet_and_get_response(self, packet_name) -> str:
         pass
@@ -338,13 +328,13 @@ class LearnCls:
         click_path_dict = uip_dict[ui_name]
         # start collecting packets
         packet_name = self.PACKET_ROOT_PATH + ui_name + str(time.time()) + ".pcap"
-        self.get_output_start(packet_name)
+
         # click one by one
         for index in click_path_dict.keys():
             if "description" in click_path_dict[index].keys():
-                print(index + "---" + click_path_dict[index]["description"])
+                print("\t" + index + "---" + click_path_dict[index]["description"])
             else:
-                print(index + "---" + ui_name + ": " + click_path_dict[index])
+                print("\t" + index + "---" + ui_name + ": " + click_path_dict[index])
 
             # waiting for manually click
             if "waiting_time" in click_path_dict[index].keys():
@@ -367,16 +357,19 @@ class LearnCls:
                         click_path_dict[index]["act_after"] = driver.current_activity
                 except exceptions.NoSuchElementException:
                     # retry for 3 times
+                    if_find_flag = False
                     for temp_index in range(3):
                         time.sleep(5)
                         try:
                             driver.find_element(By.XPATH, cur_ui_xpath).click()
+                            if_find_flag = True
                             break
                         except exceptions.NoSuchElementException:
                             pass
-                    print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
-                    self.stop_tshark()
-                    exit(-1)
+                    if not if_find_flag:
+                        print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
+                        self.stop_tshark()
+                        exit(-1)
 
             # find element by resource id
             elif "resource_id" in click_path_dict[index].keys():
@@ -395,23 +388,23 @@ class LearnCls:
                         click_path_dict[index]["act_after"] = driver.current_activity
                 except exceptions.NoSuchElementException:
                     # retry for 3 times
+                    if_find_flag = False
                     for temp_index in range(3):
-                        time.sleep(2)
+                        time.sleep(10)
                         try:
                             driver.find_element(By.ID, cur_ui_id).click()
+                            if_find_flag = True
                             break
                         except exceptions.NoSuchElementException:
                             pass
-                    print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
-                    self.stop_tshark()
-                    exit(-1)
+                    if not if_find_flag:
+                        print("[ERROR] can not find component when --- " + click_path_dict[index]["description"])
+                        self.stop_tshark()
+                        exit(-1)
 
             # get current activity and check
             time.sleep(0.5)  # wait for activity
             cur_activity = driver.current_activity
-
-        # collection end
-        self.get_output_end()
 
         # parse packet and return
         return self.parse_packet_and_get_response(packet_name)
@@ -458,9 +451,9 @@ class LearnCls:
         self.response_to_learner(self.get_input_from_learner() + "_suc")
 
 
-def learn_main():
+def learn_main(scan_result_name):
     # create an entity of learn
-    learn_entity = LearnCls()
+    learn_entity = LearnCls(scan_result_name)
     # get val_buttons
     val_but_dict = learn_entity.get_valuable_button(learn_entity.VALUABLE_BUTTON_FILE)
 
@@ -475,28 +468,59 @@ def learn_main():
     driver = learn_entity.get_phone_conf_and_start_driver(learn_entity.PHONE_CONF_FILE)
 
     while True:
-        # start test and get input
-        learner_input = learn_entity.get_input_from_learner()
+        if manually_flag:
+            # get manually input list
+            learner_input_list = learn_entity.get_input_from_learner()
+            print("[DEBUG] Manually test start")
+            # test for 3 counts
+            for count in range(3):
+                print("[DEBUG] Current count: " + str(count))
+                # for each input in list
+                for learner_input in learner_input_list:
+                    if learner_input in val_but_dict.keys():
+                        if learn_entity.APK_NAME + driver.current_activity != learn_entity.HOME_PAGE_ACT:
+                            learn_entity.back_to_home(learn_entity.APK_NAME + driver.current_activity, driver)
+                        print("[DEBUG] Manually click task-----" + learner_input)
+                        learn_entity.start_tshark(learner_input)
+                        time.sleep(5)
+                        click_output = learn_entity.click_button(learner_input, val_but_dict, driver)
+                        time.sleep(5)
+                        learn_entity.stop_tshark()
 
-        if learner_input in val_but_dict.keys():
-            if learn_entity.APK_NAME + driver.current_activity != learn_entity.HOME_PAGE_ACT:
-                learn_entity.back_to_home(learn_entity.APK_NAME + driver.current_activity, driver)
-            print("[LOG] Click task-----" + learner_input)
-            learn_entity.start_tshark(learner_input)
-            time.sleep(5)
-            click_output = learn_entity.click_button(learner_input, val_but_dict, driver)
-            time.sleep(5)
-            learn_entity.stop_tshark()
+                        if learn_entity.update_act_flag:
+                            # update conf
+                            with open(learn_entity.VALUABLE_BUTTON_FILE, "w") as f:
+                                json.dump(val_but_dict, f, indent=2)
 
-            if learn_entity.update_act_flag:
-                # update conf
-                with open(learn_entity.VALUABLE_BUTTON_FILE, "w") as f:
-                    json.dump(val_but_dict, f, indent=2)
+                    else:
+                        break
 
-            # learn_entity.response_to_learner(click_output)
-
-        else:
+                    # sleep
+                    time.sleep(10)
+            print("[DEBUG] Manually test finish")
             break
+        else:
+            # start test and get input
+            learner_input = learn_entity.get_input_from_learner()
+
+            if learner_input in val_but_dict.keys():
+                if learn_entity.APK_NAME + driver.current_activity != learn_entity.HOME_PAGE_ACT:
+                    learn_entity.back_to_home(learn_entity.APK_NAME + driver.current_activity, driver)
+                print("[LOG] Click task-----" + learner_input)
+                learn_entity.start_tshark(learner_input)
+                time.sleep(5)
+                click_output = learn_entity.click_button(learner_input, val_but_dict, driver)
+                time.sleep(5)
+                learn_entity.stop_tshark()
+
+                if learn_entity.update_act_flag:
+                    # update conf
+                    with open(learn_entity.VALUABLE_BUTTON_FILE, "w") as f:
+                        json.dump(val_but_dict, f, indent=2)
+
+                learn_entity.response_to_learner(click_output)
+            else:
+                break
 
     # close android driver and shutdown frida
     driver.quit()

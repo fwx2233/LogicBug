@@ -6,13 +6,13 @@ from analyse_app import analyse
 
 
 def start_main():
-    # print("[+] Program start")
-    #
-    # print("[+] Start analysing appcrawler result")
-    # analyse.analyse_main()
+    print("[LOG] Welcome!!! Testing program is come to start now")
 
-    print("[+] Start learn model")
-    learn.learn_main()
+    print("[LOG] Start analysing appcrawler result")
+    scan_folder_name = analyse.analyse_main("com.huawei.smarthome")
+
+    print("[LOG] Start learn model")
+    learn.learn_main(scan_folder_name)
 
 
 if __name__ == "__main__":

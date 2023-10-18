@@ -159,9 +159,9 @@ def if_terminate(ui_list):
         pass
 
 
-def analyse_main():
+def analyse_main(apk_name_for_test):
     # scan all ui components
-    temp_result_path = scan_all_ui("test apk")
+    temp_result_path = scan_all_ui(apk_name_for_test)
 
     # # check if the ui_list is null
     # if_terminate(ui_list)
@@ -172,3 +172,5 @@ def analyse_main():
     #
     # # check again
     # if_terminate(ui_list)
+
+    return temp_result_path
