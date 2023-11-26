@@ -1,6 +1,7 @@
 design/
 learn_model/models/
 learn_model/packets/
+learn_model/bert-base-uncased/
 learn_model/learnlib_module/.idea/
 learn_model/learnlib_module/result/
 learn_model/learnlib_module/target/
@@ -11,7 +12,7 @@ apks/
 
 analyse_app/temp_scan_result/
 
-log_folder/
+log/
 
 .idea/
 

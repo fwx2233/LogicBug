@@ -95,7 +95,7 @@
       "description": "back to HOME"
     }
   },
-  "add_device": {
+  "ADU1CWRD88:97:46:2C:9A:CE": {
     "1": {
       "xpath": "//android.widget.ImageView[@content-desc='Add']",
       "act_before": ".activity.MainActivity",
@@ -116,14 +116,16 @@
       "waiting_time": 8
     },
     "4": {
-      "waiting_time": 30,
-      "description": "======== Please click 'connect' manually ======="
+      "posi_x": 700,
+      "posi_y": 2200,
+      "description": "Click 'connect' and waiting for connection"
     },
     "5": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.ScrollView/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.TextView[1]",
       "act_before": ".deviceadd.ui.activity.AddDeviceInfoSettingActivity",
       "act_after": ".deviceadd.ui.activity.AddDeviceInfoSettingActivity",
-      "description": "select first room"
+      "description": "select first room",
+      "waiting_time": 25
     },
     "6": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.RelativeLayout/android.widget.LinearLayout[2]/android.widget.Button",
@@ -159,7 +161,7 @@
       "description": "back to home"
     }
   },
-  "share_device": {
+  "SDU1CWRU2D88:97:46:2C:9A:CE": {
     "1": {
       "xpath": "//android.widget.ImageView[@content-desc='Add']",
       "act_before": ".activity.MainActivity",
@@ -197,10 +199,10 @@
       "description": "select in contact"
     },
     "7": {
-      "xpath": "//android.widget.TextView[@content-desc='Test1']",
+      "xpath": "//android.widget.TextView[@content-desc='user2']",
       "act_before": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
       "act_after": ".family.activity.SharedPhoneMemberInfoActivity",
-      "description": "select user 1 for test"
+      "description": "select user 2 for test"
     },
     "8": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout[3]/android.widget.Button[2]",
@@ -218,7 +220,7 @@
       "description": "click the 1st device card in home page"
     }
   },
-  "invite_user": {
+  "SAU1CWRU2": {
     "1": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout/android.widget.LinearLayout",
       "act_before": ".activity.MainActivity",
@@ -256,7 +258,7 @@
       "description": "select in contact"
     },
     "7": {
-      "xpath": "//android.widget.TextView[@content-desc='user1']",
+      "xpath": "//android.widget.TextView[@content-desc='user2']",
       "act_before": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
       "act_after": ".family.activity.ChoiceSharedMemberActivity",
       "description": "select user1 for test"
@@ -268,7 +270,7 @@
       "description": "click OK"
     }
   },
-  "unshare": {
+  "USU1CWRU2": {
     "1": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.LinearLayout/android.widget.LinearLayout",
       "act_before": ".activity.MainActivity",
@@ -306,7 +308,7 @@
       "description": "click 'REMOVE' again for sure"
     }
   },
-  "remove_device": {
+  "RDU1CWRD88:97:46:2C:9A:CE": {
     "1": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup",
       "act_before": ".activity.MainActivity",
@@ -332,7 +334,7 @@
       "description": "remove(double check)"
     }
   },
-  "device_off_and_on": {
+  "DCU1": {
     "1": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout[3]/android.widget.FrameLayout",
       "act_before": ".activity.MainActivity",

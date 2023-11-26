@@ -3,15 +3,17 @@ Main
 """
 from learn_model import learn
 from analyse_app import analyse
+from log import mlog
 
 
 def start_main():
-    print("[LOG] Welcome!!! Testing program is come to start now")
+    mlog.clear_log()
+    mlog.log_func(mlog.LOG, "Welcome!!! Testing program is come to start now")
 
-    print("[LOG] Start analysing appcrawler result")
+    mlog.log_func(mlog.LOG, "Start analysing appcrawler result")
     scan_folder_name = analyse.analyse_main("com.huawei.smarthome")
 
-    print("[LOG] Start learn model")
+    mlog.log_func(mlog.LOG, "Start learn model")
     learn.learn_main(scan_folder_name)
 
 
