@@ -13,9 +13,15 @@ import de.learnlib.oracle.equivalence.MealyWpMethodEQOracle;
 import de.learnlib.oracle.membership.SULOracle;
 import de.learnlib.util.statistics.SimpleProfiler;
 import net.automatalib.automata.transducers.MealyMachine;
+import net.automatalib.serialization.dot.GraphDOT;
 import net.automatalib.words.Word;
 import net.automatalib.words.impl.GrowingMapAlphabet;
 import de.learnlib.filter.cache.sul.SULCaches;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintStream;
 
 public class Learner {
     LearnConfiguration config;
@@ -77,7 +83,16 @@ public class Learner {
         LogManager.logger.logEvent("Equivalence oracle (WpMethod) initialization complete");
     }
 
-    public void learn() {
+    private static void writeDotModel(MealyMachine<?, String, ?, String> model, GrowingMapAlphabet<String> alphabet, String filename) throws IOException {
+        // Write output to dot-file
+        File dotFile = new File(filename);
+        PrintStream psDotFile = new PrintStream(dotFile);
+        GraphDOT.write(model, alphabet, psDotFile);
+        psDotFile.close();
+        Runtime.getRuntime().exec("dot -Tpdf -O " + filename);
+    }
+
+    public void learn() throws IOException {
         LogManager.logger.logEvent("Start Learning");
 
         SimpleProfiler.start("Total time");
@@ -93,6 +108,8 @@ public class Learner {
 
         while (learning) {
             // TODO 输出当前模型
+            writeDotModel(hypothesis, alphabet, config.outputDir + "/hypothesis_" + round.getCount() + ".dot");
+
 
             // 使用一致性检测寻找反例
             SimpleProfiler.start("Searching for counter-example");
@@ -102,7 +119,7 @@ public class Learner {
             if (counterExample == null) {
                 learning = false;
                 // TODO 输出最终模型
-
+                writeDotModel(hypothesis, alphabet, config.outputDir + "/learnedModel.dot");
             } else {
                 // 存在反例，进行下一轮成员查询
                 LogManager.logger.logCounterexample("Current counterexample: " + counterExample);
