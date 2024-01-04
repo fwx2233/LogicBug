@@ -14,7 +14,8 @@ apks/
 
 analyse_app/temp_scan_result/
 
-log_folder/
+log/*.txt
+log/*.log
 
 .idea/
 
