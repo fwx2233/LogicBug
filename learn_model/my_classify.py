@@ -55,11 +55,7 @@ def use_total_important_word_for_classifying(op_name, pcap_payload_list):
             print_entropy_list[-1].append(entropy)
 
             if entropy == 0:
-            # if entropy < 100:
                 vector_mapping[class_index_y] = class_name
-
-    # for item in print_entropy_list:
-    #     print(item)
 
     vector_mapping = dict(sorted(vector_mapping.items(), key=lambda x: x[0]))
     return [value for number, value in vector_mapping.items()]

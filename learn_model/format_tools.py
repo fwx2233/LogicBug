@@ -5,7 +5,9 @@ def filter_some_strings_by_re(string):
     patterns = [r'"*\b(time|date|timestamp)\b"*:*',
                 r'\d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2} \w{3}',
                 r'[a-zA-Z0-9]*time[a-zA-Z0-9]*',
-                r'"*\b(seq)\b"*:*']
+                r'"*\b(seq)\b"*:*',
+                r'"picture.*":',
+                r'"award(s)?_.*":']
     for pattern in patterns:
         if re.search(pattern, string, re.IGNORECASE):
             return True
@@ -15,9 +17,23 @@ def filter_some_strings_by_re(string):
 def remove_string_by_some_pattern(strings):
     for reverse_index in range(len(strings) - 1, -1, -1):
         if filter_some_strings_by_re(strings[reverse_index]):
-            # strings.pop(reverse_index)
             strings[reverse_index] = "--pattern-string--"
     return strings
+
+
+def get_diff_index_in_list(under_test_list):
+    diff_index = []
+    for index in range(len(under_test_list[0])):
+        item_set = set()
+        for item in under_test_list:
+            item_set.add(item[index])
+
+        if len(item_set) > 1:
+            diff_count = len(item_set)
+            if diff_count >= len(under_test_list) / 2:
+                diff_index.append(index)
+
+    return diff_index
 
 
 def remove_blank_str(result_str, split_char):
@@ -60,8 +76,19 @@ def sort_dict_by_key(dictionary):
     return sorted_dict
 
 
-if __name__ == "__main__":
-    json_str = '{"hasMore": false, "customerDatas": [{"value": {"updateCloudTimeStamp": 1698735702739, "deviceseq": [{"id": "30df5e4f-1e53-490e-ba24-dc8366b9c99e", "newdev": 0, "node": [], "seq": 0}], "savefrom": "android"}, "key": "devicecardseq-2nsepriccd01fdvnm8m3ieg", "name": "devicecardseq-2nsepriccd01fdvnm8m3ieg", "Time": 1698735702739", time: ddddd,  20 Oct 2023 06:12:08 GMT, "createTime": "2023-10-20 20:52:56", endTime: 11-22-2023}]}'
-    json_str = remove_split_characters(json_str)
-    print(json_str.split(","))
-    print(",".join(remove_string_by_some_pattern(json_str.split(","))))
+def check_if_string_is_id_class(string_under_check):
+    pattern = r'^[a-zA-Z0-9-]{16,}$'
+    match = re.match(pattern, string_under_check)
+    if match:
+        return True
+    else:
+        return False
+
+
+def remove_http_stop_words(string_list, disabled_words_list):
+    """
+    ad-hoc operation: remove some http header features parsed by wireshark
+    """
+    for word in disabled_words_list:
+        string_list = [string for string in string_list if word not in string]
+    return string_list

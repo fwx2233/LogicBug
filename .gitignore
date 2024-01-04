@@ -5,6 +5,8 @@ learn_model/bert-base-uncased/
 learn_model/learnlib_module/.idea/
 learn_model/learnlib_module/result/
 learn_model/learnlib_module/target/
+learn_model/*.json
+learn_model/*.txt
 
 #config/
 
@@ -12,7 +14,7 @@ apks/
 
 analyse_app/temp_scan_result/
 
-log/
+log_folder/
 
 .idea/
 
