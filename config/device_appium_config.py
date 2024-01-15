@@ -1,3 +1,5 @@
+appium_path = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
+
 device_configs = {
     "nexus": {
         # owner---local control and add device
@@ -40,5 +42,5 @@ def get_device_config_by_name(device_name):
     return False
 
 
-def get_dev_list():
+def get_device_list():
     return list(device_configs.keys())

@@ -55,5 +55,5 @@ def clear_log():
         os.remove(LOG_FILE)
 
 
-def save_log(log_name_new: str):
+def save_log_as_name(log_name_new: str):
     shutil.move(LOG_FILE, LOG_FOLDER_ROOT + "/" + log_name_new)

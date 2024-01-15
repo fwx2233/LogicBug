@@ -34,13 +34,14 @@ class LearnCls:
         self.ACT_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/act_tg_" + scan_folder_name + ".json"
         self.ADD_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/additional_tg_" + scan_folder_name + ".json"
         self.VALUABLE_BUTTON_FILE = self.CONF_FOLDER_PATH + "valuable_button.json"
-        self.APPIUM_PATH = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
+        # self.APPIUM_PATH = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
+        self.APPIUM_PATH = device_appium_config.appium_path
 
         # get config of device
         self.DEVICE_CONFIG_DICT = device_appium_config.get_device_config_by_name(device_name)
         if not self.DEVICE_CONFIG_DICT:
             mlog.log_func(mlog.ERROR, "Do not have device_name: " + device_name + ". Please check your input.")
-            print("Device_name list: ", device_appium_config.get_dev_list())
+            print("Device_name list: ", device_appium_config.get_device_list())
             exit(10)
 
         self.APK_NAME = self.DEVICE_CONFIG_DICT["appPackage"]
@@ -61,7 +62,6 @@ class LearnCls:
         self.start_appium_server(self.APPIUM_PATH)
         time.sleep(3)
         mlog.log_func(mlog.LOG, "SSL Pinning disabled")
-
 
         # communication information
         self.LOCAL_IP = ""

@@ -1,6 +1,6 @@
 """
-Scan APP to get all valuable ui compoments.
-Maybe we use AppCrawler to scan ui compoments.
+Scan APP to get all valuable ui components.
+Maybe we use AppCrawler to scan ui components.
 """
 import sys, os
 import json

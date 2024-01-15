@@ -1,7 +1,4 @@
 design/
-
-.idea/
-
 learn_model/models/
 learn_model/packets/
 learn_model/bert-base-uncased/
