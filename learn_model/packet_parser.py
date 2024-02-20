@@ -9,6 +9,7 @@ import numpy as np
 import re
 import Levenshtein
 from collections import defaultdict
+import xmltodict
 
 import get_ips
 import my_classify
@@ -19,7 +20,7 @@ from protocol_feature import feature_dict
 ROOT_PATH = os.path.dirname(__file__)
 PACKET_ROOT_PATH = ROOT_PATH + "/packets/"
 
-FILTER_CONDITION = "((http or mqtt or ((udp and !dns) and (udp and !mdns))) and !bootp and !(ip.addr == 10.42.0.1) and !coap)"
+FILTER_CONDITION = "((http or mqtt or ((udp and !dns) and (udp and !mdns))) and !bootp and !(ip.addr == 10.42.0.1) and !(ip.addr == 238.238.238.238) and !coap)"
 merged_ip_list = get_ips.merge_manual_ip_list([])
 condition_sentence = get_ips.generate_filter_condition_by_ip_list(merged_ip_list)
 FILTER_CONDITION = FILTER_CONDITION + " and " + condition_sentence
@@ -29,7 +30,8 @@ ABSTRACT_FEATURE = "HAS_FEATURE"
 # similarity threshold of documents. if larger than similarity_threshold, regard as the same word
 similarity_threshold = 0.9
 threshold_multiplier = 1
-threshold_among_each_kind_of_operation = len(os.listdir(PACKET_ROOT_PATH)) / 2
+threshold_among_each_kind_of_operation = 0.5
+threshold_in_one_op = 0.9
 
 """can delete"""
 test_flag = False
@@ -273,7 +275,17 @@ def vectorize_features(features):
     return feature_vectors
 
 
-def get_header_features(pcap, pcapng_file_name):
+def get_phone_ips():
+    from config.device_appium_config import device_configs
+    ips = []
+    for phone, conf in device_configs.items():
+        ip = conf["additionalMess"]["phone_ip"]
+        if ip not in ips:
+            ips.append(ip)
+    return ips
+
+
+def get_header_features(pcap, save_folder, pcapng_file_name, dns_mapping_list):
     pcap_feature_dict_list = []
     packet_num = 0
     merge_flag = False
@@ -284,10 +296,17 @@ def get_header_features(pcap, pcapng_file_name):
             mlog.log_func(mlog.ERROR, "packet " + str(packet.number) + " do not have ip layer")
             exit(2)
         packet_feature_dict["number"] = packet.number
-        packet_feature_dict["ip1"] = packet.ip.src
-        packet_feature_dict["ip2"] = packet.ip.dst
-        packet_feature_dict["port1"] = packet[packet.transport_layer].srcport
-        packet_feature_dict["port2"] = packet[packet.transport_layer].dstport
+        packet_feature_dict["src"] = packet.ip.src
+        packet_feature_dict["dst"] = packet.ip.dst
+        packet_feature_dict["domain"] = format_tools.get_domain_by_ip(packet.ip.dst, dns_mapping_list)
+        if packet.ip.src not in get_phone_ips():
+            packet_feature_dict["srcport"] = packet[packet.transport_layer].srcport
+        else:
+            packet_feature_dict["srcport"] = None
+        if packet.ip.dst not in get_phone_ips():
+            packet_feature_dict["dstport"] = packet[packet.transport_layer].dstport
+        else:
+            packet_feature_dict["dstport"] = None
 
         # get features for each protocol
         for protocol_name in feature_dict.keys():
@@ -305,32 +324,14 @@ def get_header_features(pcap, pcapng_file_name):
 
                 # if this packet is the response of any http packet
                 if "response" in cur_layer.field_names and "request_in" in cur_layer.field_names:
-                    # merge this response to request
+                    # merge this response to request(http)
+                    # find the request of this response
                     for index in range(len(pcap_feature_dict_list) - 1, -1, -1):
                         if pcap_feature_dict_list[index]["number"] == cur_layer.request_in:
                             pcap_feature_dict_list[index]["response_number"] = packet_feature_dict["number"]
-
-                            # merge features
-                            common_field_count = len(feature_dict["record"]) + len(feature_dict["common"])
-                            for feature_name in list(packet_feature_dict.keys())[common_field_count:]:
-                                if packet_feature_dict[feature_name]:
-                                    pcap_feature_dict_list[index][feature_name] = packet_feature_dict[feature_name]
-                    merge_flag = True
-
-                # udp response
-                if protocol_name == "udp" and "stream" in cur_layer.field_names:
-                    for index in range(len(pcap_feature_dict_list) - 1, -1, -1):
-                        if ("udp_stream" in pcap_feature_dict_list[index].keys()
-                                and pcap_feature_dict_list[index]["udp_stream"] == str(cur_layer.stream)
-                                and packet_feature_dict["ip1"] == pcap_feature_dict_list[index]["ip2"]
-                                and packet_feature_dict["port1"] == pcap_feature_dict_list[index]["port2"]):
-                            pcap_feature_dict_list[index]["response_number"] = packet_feature_dict["number"]
-                            pcap_feature_dict_list[index]["response_length"] = cur_layer.length
                             merge_flag = True
                             break
-                    if not merge_flag:
-                        packet_feature_dict["udp_stream"] = str(cur_layer.stream)
-                        packet_feature_dict["request_length"] = cur_layer.length
+
             else:
                 for field_name in feature_dict[protocol_name]:
                     packet_feature_dict[field_name] = None
@@ -342,24 +343,11 @@ def get_header_features(pcap, pcapng_file_name):
         merge_flag = False
 
     # save csv file
-    csv_name = PACKET_ROOT_PATH + pcapng_file_name.split("_")[0] + "/" + pcapng_file_name.split(".")[0] + ".csv"
+    csv_name = save_folder + pcapng_file_name.split(".")[0] + ".csv"
     with open(csv_name, "w", newline='') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames_of_csv)
         writer.writeheader()
         writer.writerows(pcap_feature_dict_list)
-    csv_name = csv_name.split("/")[-1]
-
-    # # get features for mapping
-    # # remove some fields
-    # temp_fieldnames_of_csv = []
-    # for n_fea in fieldnames_of_csv:
-    #     if n_fea not in not_feature_list:
-    #         temp_fieldnames_of_csv.append(n_fea)
-
-    # features = get_header_features_from_csv_files_and_enhance([csv_name], temp_fieldnames_of_csv, enhance_feature_dict)
-
-    # return csv_name, features, packet_num
-    return csv_name, pcap_feature_dict_list, packet_num
 
 
 def get_dataset_csv_list(op_name):
@@ -397,7 +385,6 @@ def get_header_features_from_dataset(op_name):
 
     features, cor_words = get_important_features_and_enhanced(file_list, temp_fieldnames_of_csv, enhance_feature_dict)
 
-
     return features, cor_words
 
 
@@ -411,32 +398,54 @@ def get_important_words_from_dataset(op_name):
 
 def get_payload_from_packet(packet):
     highest_layer_name = get_highest_except_segments_layer_name(packet)
+    return_str = None
 
-    if highest_layer_name == "data":  # udp
-        ascii_str_list = str(packet.data.data).split(":")
-        # result_str = ""
-        # for ascii_value in ascii_str_list:
-        #     try:
-        #         char = chr(int(ascii_value, 16))
-        #         result_str += char
-        #     except ValueError:
-        #         mlog.log_func(mlog.ERROR, "Invalid ASCII value:" + ascii_value)
-        #         exit(2)
-        # result_str = format_tools.remove_split_characters(result_str)
-        # result_str = ",".join(format_tools.remove_string_by_some_pattern(result_str.split(",")))
-        result_str = ",".join(ascii_str_list)
-        return result_str
+    # udp
+    if "udp" in packet:
+        if highest_layer_name == "data":
+            if packet.data.data.isascii():
+                ascii_str_list = str(packet.data.data).split(":")
 
-    packet_highest_payload_str = str(packet.get_multiple_layers(highest_layer_name)[0]).replace(
-        "Layer " + highest_layer_name.upper() + "\n:", "")
-    if highest_layer_name == "json":
-        packet_highest_payload_str = jsonlayer_parser.parse_main(packet_highest_payload_str)
+                return_str = ""
+                for ascii_value in ascii_str_list:
+                    try:
+                        char = chr(int(ascii_value, 16))
+                        return_str += char
+                    except ValueError:
+                        mlog.log_func(mlog.ERROR, "Invalid ASCII value:" + ascii_value)
+                        exit(2)
+            else:
+                return_str = str(packet.data.data)
+
+    # tcp
+    if "tcp" in packet:
+        # http
+        if "http" in packet:
+            # with file_data
+            if "file_data" in packet.http.field_names:
+                return_str = packet.http.file_data
+            else:
+                # just with return code
+                return_str = sorted(packet.http.field_names)[0]
+        # mqtt
+        if "mqtt" in packet:
+            mqtt_layer = packet.mqtt
+            field_names = sorted(mqtt_layer.field_names)
+            if "msg" in field_names:
+                # return str(mqtt_layer.msg)
+                return_str = mqtt_layer.msg
+            else:
+                mqtt_info = {}
+                for field in field_names:
+                    if "len" not in field and "msgid" not in field:
+                        mqtt_info[field] = mqtt_layer._get_internal_field_by_name(field)
+                return_str = mqtt_info
+                # return str(mqtt_info)
+
+    if return_str:
+        return str(return_str)
     else:
-        packet_highest_payload_str = "\n".join(
-            format_tools.remove_http_stop_words(sorted(packet_highest_payload_str.split("\n")), disabled_words))
-    packet_highest_payload_str = format_tools.remove_split_characters(packet_highest_payload_str)
-    packet_highest_payload_str = ",".join(format_tools.remove_string_by_some_pattern(packet_highest_payload_str.split(",")))
-    return packet_highest_payload_str
+        return "payload_is_None"
 
 
 def get_payload_from_preprogress_dataset(op_name):
@@ -489,8 +498,11 @@ def split_list_by_length(strings):
     length_dict = defaultdict(list)
 
     for temp_index in range(len(strings)):
-        length = len(strings[temp_index])
-        length_dict[length].append([temp_index, strings[temp_index]])
+        if strings[temp_index]:
+            length = len(strings[temp_index])
+            length_dict[length].append(strings[temp_index])
+        else:
+            length_dict['0'].append(strings[temp_index])
 
     result = list(length_dict.values())
     return result
@@ -585,487 +597,565 @@ def format_payload_str_by_entropy_and_pattern(word_number_dict, important_word_l
     return word_number_dict
 
 
-def pre_parse():
+def get_dataset_name_list():
+    return_list = []
+    all_file_list = os.listdir(PACKET_ROOT_PATH)
+    for item in all_file_list:
+        if "_" in item and os.path.isdir(PACKET_ROOT_PATH + item):
+            return_list.append(item)
+
+    return return_list
+
+
+def parse_dns_and_get_ip_domain(pcap_file):
+    dns_mapping_list = []
+
+    def parse_dns_response(dns_layer):
+        cur_mapping = {}
+        reflect_cname_mapping = {}
+        count_answers = int(dns_layer.count_answers)
+        dns_layer = str(dns_layer).replace("\t", "").split("\n")
+        if "Answers" in dns_layer:
+            start_index = dns_layer.index("Answers") + 1
+            for item in dns_layer[start_index: start_index + count_answers]:
+                domain = item.split(":")[0]
+                result = item.split()[-1]
+                if "CNAME" in item:
+                    # cur_mapping[domain] = result
+                    reflect_cname_mapping[result] = domain
+                elif 'A' in item:
+                    # if domain not in cur_mapping:
+                    #     cur_mapping[domain] = []
+                    # cur_mapping[domain].append(result)
+                    cur_mapping[result] = domain
+            for ip in cur_mapping:
+                while cur_mapping[ip] in reflect_cname_mapping:
+                    cur_mapping[ip] = reflect_cname_mapping[cur_mapping[ip]]
+
+        return cur_mapping
+
+    cap = pyshark.FileCapture(pcap_file, display_filter="dns")
+    for packet in cap:
+        if "dns" not in dir(packet):
+            continue
+        if 'resp_name' in packet.dns.field_names:
+            dns_layer = packet.dns
+            parse_result = parse_dns_response(dns_layer)
+            if parse_result not in dns_mapping_list:
+                dns_mapping_list.append(parse_result)
+    cap.close()
+
+    return dns_mapping_list
+
+
+def get_key_from_uri(uri_str):
+    return "|".join([str(len(x)) for x in uri_str.split("/")])
+
+
+def get_url_pattern(dataset, threshold=0.5) -> dict:
+    """
+    get http-url pattern for dataset
+    :param dataset: dataset
+    :param threshold: When the number of changes exceeds the <threshold>, the part is considered to be abstracted
+    :return: pattern dictionary
+    """
+    result_dict = {}
+    dataset_path = PACKET_ROOT_PATH + dataset + "/"
+    operation_folders = os.listdir(dataset_path)
+
+    for op in operation_folders:
+        if not os.path.isdir(dataset_path + op):
+            continue
+        op_folder_path = dataset_path + op + "/"
+        file_list = os.listdir(op_folder_path)
+
+        # read from csv files
+        for file in file_list:
+            if op not in file or file.split(".")[-1] != "csv":
+                continue
+            with open(op_folder_path + file, "r") as f_handle:
+                reader = csv.reader(f_handle)
+                header = next(reader)
+                domain_index = list(header).index("domain")
+                uri_index = list(header).index("request_uri")
+                for line in list(reader):
+                    if line[uri_index] and line[domain_index]:
+                        if line[domain_index] not in result_dict:
+                            result_dict[line[domain_index]] = {}
+                        format_uri_key = get_key_from_uri(line[uri_index])
+                        if format_uri_key not in result_dict[line[domain_index]]:
+                            result_dict[line[domain_index]][format_uri_key] = []
+                        if line[uri_index] not in result_dict[line[domain_index]][format_uri_key]:
+                            result_dict[line[domain_index]][format_uri_key].append(line[uri_index])
+
+    pattern_dict = {}
+    # get uri pattern
+    for domain in result_dict.keys():
+        for key, uri_list in result_dict[domain].items():
+            new_pattern_list = format_tools.get_patterns_for_cases(uri_list)
+            record_flag = False
+            for pattern_index in range(len(new_pattern_list)):
+                pattern_str = "".join(new_pattern_list[pattern_index])
+                if "Abs_Len" in pattern_str:
+                    record_flag = True
+            # len_threshold = len(uri_list) * threshold
+            # split_list = [x.split("/") for x in uri_list]
+            # for temp_index in range(len(split_list[0])):
+            #     temp_list = list(set([uri[temp_index] for uri in split_list]))
+            #     if len(temp_list) != 1 and len(temp_list) > len_threshold:
+            #         for change_index in range(len(uri_list)):
+            #             abstract_str = "Ab_Len" + str(len(temp_list[0]))
+            #             sp = uri_list[change_index].split("/")
+            #             sp[temp_index] = abstract_str
+            #             uri_list[change_index] = "/".join(sp)
+            #         # add to pattern dictionary
+            #         if domain not in pattern_dict:
+            #             pattern_dict[domain] = dict()
+            #         if key not in pattern_dict[domain]:
+            #             pattern_dict[domain][key] = []
+            #         pattern_dict[domain][key].extend(list(set(uri_list)))
+            if record_flag:
+                # add to pattern dictionary
+                if domain not in pattern_dict:
+                    pattern_dict[domain] = dict()
+                if key not in pattern_dict[domain]:
+                    pattern_dict[domain][key] = []
+                pattern_dict[domain][key].extend(new_pattern_list)
+
+    with open(dataset_path + "uri_pattern.json", "w") as f:
+        f.write(json.dumps(pattern_dict, indent=4))
+
+    return pattern_dict
+
+
+def modify_csv_by_pattern(csv_path, pattern_dict):
+    """
+
+    """
+    flag = False
+    with open(csv_path, "r") as f_handle:
+        reader = csv.reader(f_handle)
+        line_copy = list(reader).copy()
+        header = line_copy[0]
+        domain_index = list(header).index("domain")
+        uri_index = list(header).index("request_uri")
+        for line in line_copy[1:]:
+            if line[domain_index] in pattern_dict:
+                if line[uri_index] and get_key_from_uri(line[uri_index]) in pattern_dict[line[domain_index]]:
+                    # for pattern_str in pattern[line[domain_index]][get_key_from_uri(line[uri_index])]:
+                    #     prefix = pattern_str.split("Abs_Len")[0]
+                    #     suffix = "/".join(pattern_str.split("Ab_len_")[-1].split("/")[1:])
+                    #     if prefix in line[uri_index] and suffix in line[uri_index]:
+                    #         line[uri_index] = pattern_str
+                    #         flag = True
+                    #         break
+                    pattern_oir_list_mode = format_tools.pattern_matching(line[uri_index], pattern_dict[line[domain_index]][get_key_from_uri(line[uri_index])])
+                    if pattern_oir_list_mode:
+                        line[uri_index] = "".join(pattern_oir_list_mode)
+                        flag = True
+    if flag:
+        with open(csv_path, "w") as f_handle:
+            writer = csv.writer(f_handle)
+            writer.writerows(line_copy)
+
+
+def modify_dataset_by_pattern(dataset, pattern):
+    dataset_path = PACKET_ROOT_PATH + dataset + "/"
+    operation_folders = os.listdir(dataset_path)
+
+    for op in operation_folders:
+        if not os.path.isdir(dataset_path + op):
+            continue
+        op_folder_path = dataset_path + op + "/"
+        file_list = os.listdir(op_folder_path)
+
+        # read from csv files
+        for file in file_list:
+            if op not in file or file.split(".")[-1] != "csv":
+                continue
+            modify_csv_by_pattern(op_folder_path + file, pattern)
+
+
+def pre_parse(dataset_list: list):
     """
     Analyse dataset and learn how to extract an abstract response for LearnLib.
+    :param dataset_list:
     """
+    mlog.log_func(mlog.LOG, "Start pre-parsing...")
+    mlog.log_func(mlog.LOG, "Dataset: ")
+    mlog.log_list_func(mlog.LOG, dataset_list)
 
-    mlog.log_func(mlog.LOG, "Start pre-parsing......")
-    """
-    ================================ module 1 ================================
-    Read pcapng files and extract header features.
-    Save features in corresponding csv file.
-    """
-    mlog.log_func(mlog.LOG, "Start reading pcapng files and extracting features")
+    temp_count = 0
+    for dataset in dataset_list:
+        mlog.log_func(mlog.LOG, f"Current dataset: {dataset}")
 
-    # temp_count = 0
-    # total_pcapng_file_list = []
-    # for operation_folder in all_packet_folder_list:
-    #     # get operation folder
-    #     abs_operation_folder = PACKET_ROOT_PATH + operation_folder + "/"
-    #     if not os.path.isdir(abs_operation_folder):
-    #         continue
-    #     pcapng_file_list = os.listdir(abs_operation_folder)
-    #     # for each pcapng file, get its feature.csv file
-    #     for item in pcapng_file_list:
-    #         if item.split('.')[-1] == "pcapng":
-    #             keylog_file = item.split('.')[0] + ".txt"
-    #             if not os.path.exists(abs_operation_folder + keylog_file):
-    #                 continue
-    #             total_pcapng_file_list.append(item.split('.')[0])
-    #             # read packet and it's key log file
-    #             temp_count += 1
-    #             mlog.log_func(mlog.LOG, str(temp_count) + " Reading pcapng file:" + item)
-    #
-    #             pcap = pyshark.FileCapture(abs_operation_folder + item, display_filter=FILTER_CONDITION,
-    #                                        override_prefs={'ssl.keylog_file': abs_operation_folder + keylog_file})
-    #             pcapng_order_and_length_dict[item.split('.')[0]] = get_header_features(pcap, item)[-1]
-    #             pcap.close()
+        """
+        ================================ module 1 ================================
+        Read pcapng files and extract header features.
+        Save features in corresponding csv file.
+        """
+        mlog.log_func(mlog.LOG, "Start module 1: reading pcapng files and extracting features")
 
-    """
-    ================================ module 2 ================================
-    Filter packets which appear more than threshold times among all operations.
-    """
-    mlog.log_func(mlog.LOG, "Start filtering packet which appears more than threshold times among all operations.")
+        dataset_path = PACKET_ROOT_PATH + dataset + "/"
 
-    feature_ops_dict = {}
+        # get the knowledge of dns mapping from ip to domain
+        dns_mapping = parse_dns_and_get_ip_domain(dataset_path + dataset + ".pcapng")
 
-    # get feature aggregation from each csv and static appearance time
-    for operation in os.listdir(PACKET_ROOT_PATH):
-        # get operation folder
-        abs_operation_folder = PACKET_ROOT_PATH + operation + "/"
-        if not os.path.isdir(abs_operation_folder):
-            continue
-        file_list = os.listdir(abs_operation_folder)
-        for cur_file in file_list:
-            # find csv file
-            if cur_file[-3:] != "csv":
+        all_packet_folder_list = os.listdir(dataset_path)
+        for operation_folder in all_packet_folder_list:
+            if not os.path.isdir(dataset_path + operation_folder):
                 continue
 
-            # read csv file
-            with open(abs_operation_folder + cur_file, "r") as file:
-                reader = csv.reader(file)
-                header = next(reader)
-                start_index = header.index("ip2")
-                lines = list(reader)
-                for line in lines[1:]:
-                    cur_line_feature = "|".join(line[start_index:])
-                    if cur_line_feature not in feature_ops_dict:
-                        feature_ops_dict[cur_line_feature] = [operation]
-                    elif operation not in feature_ops_dict[cur_line_feature]:
-                        feature_ops_dict[cur_line_feature].append(operation)
+            mlog.log_func(mlog.LOG, f"-Operation: {operation_folder}")
+            # get operation folder
+            abs_operation_folder = dataset_path + operation_folder + "/"
+            file_list = os.listdir(abs_operation_folder)
+            # for each pcapng file, get its feature.csv file
+            for item in file_list:
+                if item.split('.')[-1] == "txt" and operation_folder in item:
+                    temp_count += 1
+                    mlog.log_func(mlog.LOG, str(temp_count) + " Reading file: " + item, t_count=1)
+                    with open(abs_operation_folder + item, "r") as f:
+                        lines = f.readlines()
+                        pcap_name = lines[0].replace("\n", "")
+                        start_time = lines[1].replace("\n", "")
+                        end_time = lines[2].replace("\n", "")
 
-    # sort by key
-    feature_ops_dict = format_tools.sort_dict_by_key(feature_ops_dict)
+                    # read pcap file and extract features
+                    keylog_file = pcap_name.split('.')[0] + ".txt"
+                    cur_wireshark_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION
+                    pcap = pyshark.FileCapture(dataset_path + pcap_name, display_filter=cur_wireshark_filter_expression,
+                                                  override_prefs={'ssl.keylog_file': dataset_path + keylog_file})
+                    get_header_features(pcap, abs_operation_folder, item, dns_mapping)
+                    pcap.close()
 
-    # Collects statistics on features whose number of occurrences exceeds the threshold
-    with open(PACKET_ROOT_PATH + "filtered_features.txt", "w") as f:
-        for feature in feature_ops_dict:
-            if len(feature_ops_dict[feature]) > threshold_among_each_kind_of_operation:
-                f.write(feature)
-                f.write("\n")
+                    if len(lines) <= 3:
+                        lines.append("\n" + cur_wireshark_filter_expression)
+                    with open(abs_operation_folder + item, "w") as f:
+                        f.writelines(lines)
 
+        # read dataset and get pattern
+        pattern = get_url_pattern(dataset)
+        modify_dataset_by_pattern(dataset, pattern)
+
+        """
+            ================================ module 2 ================================
+            Filter packets which appear more than threshold times among all operations.
+        """
+        mlog.log_func(mlog.LOG, "Start module 2: filtering packet which appears more than threshold times among all operations.")
+
+        feature_ops_dict = {}
+        count_of_op = 0
+        # get feature aggregation from each csv and static appearance time
+        for operation in os.listdir(dataset_path):
+            # get operation folder
+            abs_operation_folder = dataset_path + operation + "/"
+            if not os.path.isdir(abs_operation_folder):
+                continue
+            count_of_op += 1
+            file_list = os.listdir(abs_operation_folder)
+            for cur_file in file_list:
+                # find csv file
+                if cur_file[-3:] != "csv":
+                    continue
+
+                # read csv file
+                with open(abs_operation_folder + cur_file, "r") as file:
+                    reader = csv.reader(file)
+                    header = next(reader)
+                    start_index = header.index("domain")
+                    protocol_index = header.index("protocol")
+                    lines = list(reader)
+                    for line in lines:
+                        cur_line_feature = "|".join(line[start_index:])
+                        if line[protocol_index] != "http":
+                            continue
+                        if cur_line_feature not in feature_ops_dict:
+                            feature_ops_dict[cur_line_feature] = [operation]
+                        elif operation not in feature_ops_dict[cur_line_feature]:
+                            feature_ops_dict[cur_line_feature].append(operation)
+
+        # sort by key
+        feature_ops_dict = format_tools.sort_dict_by_key(feature_ops_dict)
+        with open(dataset_path + "fea_ops.json", "w") as f:
+            f.write(json.dumps(feature_ops_dict, indent=4))
+
+        # Collects statistics on features whose number of occurrences exceeds the threshold
+        feature_filter_by_general_list = []
+        with open(dataset_path + "filtered_features.txt", "w") as f:
+            for feature in feature_ops_dict:
+                if len(feature_ops_dict[feature]) >= threshold_among_each_kind_of_operation * count_of_op:
+                    f.write(feature)
+                    f.write("\n")
+                    feature_filter_by_general_list.append(feature)
+
+        """
+            ================================ module 3 ================================
+            Select the operation that occurs more than the threshold in one operation
+        """
+        mlog.log_func(mlog.LOG, "Start module 3: selecting the operation that occurs more than the threshold in one operation.")
+
+        op_selected_features_dict = {}
+
+        for operation in os.listdir(dataset_path):
+            total_op_pcap = 0
+            fea_times_in_cur_op_dict = {}
+            op_selected_features_dict[operation] = []
+
+            op_folder = dataset_path + operation + "/"
+            if not os.path.isdir(op_folder):
+                continue
+
+            for item in os.listdir(op_folder):
+                if item.split(".")[-1] != "csv":
+                    continue
+                total_op_pcap += 1
+                # read csv file and get appear time for each feature
+                with open(op_folder + item, "r") as file:
+                    reader = csv.reader(file)
+                    header = next(reader)
+                    start_index = header.index("domain")
+                    protocol_index = header.index("protocol")
+                    lines = list(reader)
+                    for line in lines:
+                        if line[protocol_index] != "http":
+                            continue
+                        cur_line_feature = "|".join(line[start_index:])
+                        if cur_line_feature not in feature_filter_by_general_list:
+                            if cur_line_feature not in fea_times_in_cur_op_dict:
+                                fea_times_in_cur_op_dict[cur_line_feature] = []
+                            if item not in fea_times_in_cur_op_dict[cur_line_feature]:
+                                fea_times_in_cur_op_dict[cur_line_feature].append(item)
+
+            with open(op_folder + "static_times.json", "w") as f:
+                f.write(json.dumps(fea_times_in_cur_op_dict, indent=4))
+
+            with open(op_folder + "filtered_features.txt", "w") as f:
+                for feature in fea_times_in_cur_op_dict:
+                    if len(fea_times_in_cur_op_dict[feature]) < threshold_in_one_op * total_op_pcap:
+                        f.write(feature)
+                        f.write("\n")
+
+            with open(op_folder + "selected_features.txt", "w") as f:
+                for feature in fea_times_in_cur_op_dict:
+                    if len(fea_times_in_cur_op_dict[feature]) >= threshold_in_one_op * total_op_pcap:
+                        f.write(feature)
+                        f.write("\n")
+                        op_selected_features_dict[operation].append(feature)
+
+        """
+                    ================================ module 4 ================================
+                    get payload and payload pattern
+        """
+        mlog.log_func(mlog.LOG, "Strat module 4: get payload from dataset")
+        for operation in os.listdir(dataset_path):
+            op_folder = dataset_path + operation + "/"
+            if not os.path.isdir(op_folder):
+                continue
+
+            feature_payloads_dict = {}
+            for op_files in os.listdir(op_folder):
+                if op_files.split(".")[-1] != "csv":
+                    continue
+
+                # get pcap name, filter condition from txt
+                txt_file_name = op_files.split(".")[0] + ".txt"
+                with open(op_folder + txt_file_name, "r") as f:
+                    txt_line = f.readlines()
+                    filter_condition = txt_line[-1].replace("\n", "")
+                    pcap_file_name = txt_line[0].replace("\n", "")
+                    key_file_name = pcap_file_name.split(".")[0] + ".txt"
+
+                # get selected packet number
+                cur_op_selected_features = op_selected_features_dict[operation]
+                selected_numbers_feature = {}
+                with open(op_folder + op_files, "r") as f:
+                    reader = csv.reader(f)
+                    header = next(reader)
+                    start_index = header.index("domain")
+                    protocol_index = header.index("protocol")
+                    resp_number_index = header.index("response_number")
+                    req_number_index = header.index("number")
+                    lines = list(reader)
+                    for line in lines:
+                        cur_line_feature = "|".join(line[start_index:])
+                        if line[protocol_index] != "http":
+                            selected_numbers_feature[line[req_number_index]] = cur_line_feature
+                            continue
+                        if cur_line_feature in cur_op_selected_features:
+                            if line[resp_number_index]:
+                                selected_numbers_feature[line[resp_number_index]] = cur_line_feature
+
+                # read pcap file and get
+                pcap = pyshark.FileCapture(dataset_path + pcap_file_name, display_filter=filter_condition, use_json=True,
+                                              override_prefs={'ssl.keylog_file': dataset_path + key_file_name})
+                for packet in pcap:
+                    str_number = str(packet.number)
+                    if str_number in selected_numbers_feature:
+                        if selected_numbers_feature[str_number] not in feature_payloads_dict:
+                            feature_payloads_dict[selected_numbers_feature[str_number]] = []
+                        feature_payloads_dict[selected_numbers_feature[str_number]].append(format_tools.remove_string_by_some_pattern(get_payload_from_packet(packet)))
+                pcap.close()
+
+            feature_payloads_pattern = {}
+            for key in feature_payloads_dict:
+                feature_payloads_dict[key] = split_list_by_length(feature_payloads_dict[key])
+                if key not in feature_payloads_pattern:
+                    feature_payloads_pattern[key] = []
+                for len_split_payloads in feature_payloads_dict[key]:
+                    feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads))
+
+            with open(dataset_path + operation + "/payload_static.txt", "w") as f:
+                f.write(json.dumps(feature_payloads_dict, indent=4))
+
+            # get payload pattern
+            with open(dataset_path + operation + "/payload_pattern.txt", "w") as f:
+                f.write(json.dumps(feature_payloads_pattern, indent=4))
+
+
+def get_new_op_class_for_response(new_pcapng_file_name, param_dict):
     """
-        ================================ module 3 ================================
-        Select the operation that occurs more than the threshold in one operation
+    Giving a new pcapng file of an operation, get it's abstract class
+    :param new_pcapng_file_name: pcapng_file under classifying, such as "SA_111.pcapng"
+    :param param_dict: {op_name, start_time, end_time}
+    :return: abstract class for response
     """
-    mlog.log_func(mlog.LOG, "Start selecting the operation that occurs more than the threshold in one operation.")
+    mlog.log_func(mlog.LOG, "Parse and get new response...")
+    pcapng_file_path = PACKET_ROOT_PATH + new_pcapng_file_name.split(".")[0] + "/" + new_pcapng_file_name
+    keylog_file_path = pcapng_file_path[:-6] + "txt"
 
-    exit(111)
-
-    # """
-    # ================================ module 2 ================================
-    # Use features to fit and vectorize the document.
-    # Mapping the document to the same word if similarity between two vectors is larger than threshold.
-    # """
-    # mlog.log_func(mlog.LOG, "Fitting vectors and mapping...")
+    # # read pcapng file
+    # pcap = pyshark.FileCapture(pcapng_file_path, display_filter=FILTER_CONDITION,
+    #                            override_prefs={'ssl.keylog_file': keylog_file_path})
     #
-    # # remove some fields
-    # temp_fieldnames_of_csv = []
-    # for n_fea in fieldnames_of_csv:
-    #     if n_fea not in not_feature_list:
-    #         temp_fieldnames_of_csv.append(n_fea)
-    # features = get_header_features_from_csv_files_and_enhance(total_pcapng_file_list, temp_fieldnames_of_csv, enhance_feature_dict)
-    # tfidf_matrix = vectorize_features(features)
-    # mlog.log_func(mlog.LOG, "Total packets and the shape of vector matrix: " + str(tfidf_matrix.shape))
-    # mlog.log_func(mlog.LOG, "Similarity threshold: " + str(similarity_threshold))
-    # mlog.log_func(mlog.LOG, "Enhance count: ")
-    # mlog.log_dict_func(mlog.LOG, enhance_feature_dict)
+    # # for each packet, extract its header features and save in corresponding csv file
+    # new_csv_name, new_file_header_features, packet_number = get_header_features(pcap, new_pcapng_file_name)
+    # pcap.close()
     #
-    # # get similarity matrix
-    # similarity_matrix = cosine_similarity(tfidf_matrix)
+    # # get features from feature dataset, vectorize and mapping to word
+    # dataset_imp_features, dataset_imp_cor_words = get_header_features_from_dataset(new_op_name)
+    # total_features = dataset_imp_features + new_file_header_features
+    # feature_vectors = vectorize_features(total_features)
     #
-    # # Map vectors to words and ensure that similar vectors are the same word
-    # # dictionary to save mapping
-    # vector_mapping = {}
+    # # mapping
+    # ind_word = []
+    # for mapping_index in range(len(dataset_imp_cor_words), len(total_features)):
+    #     for finding_index in range(len(dataset_imp_features)):
+    #         if cosine_similarity(feature_vectors[mapping_index], feature_vectors[finding_index]) > similarity_threshold:
+    #             ind_word.append((mapping_index - len(dataset_imp_cor_words), dataset_imp_cor_words[finding_index]))
+    #             break
     #
-    # max_word = ""
-    # for i in range(tfidf_matrix.shape[0]):
-    #     if i in vector_mapping.keys():
-    #         continue
+    # # save mapping result in csv file
+    # with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "r") as file:
+    #     reader = csv.reader(file)
+    #     rows = list(reader)
+    # rows[0].append("mapping_word")
+    # for row_index, word in ind_word:
+    #     rows[row_index + 1].append(word)
+    # with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "w") as file:
+    #     writer = csv.writer(file)
+    #     writer.writerows(rows)
     #
-    #     # mapping to a new word
-    #     current_string = "word"+str(i)
-    #     max_word = current_string
+    # # get pre-parse payloads
+    # dataset_payloads_dict = get_payload_from_preprogress_dataset(new_op_name)
     #
-    #     for j in range(i, tfidf_matrix.shape[0]):
-    #         if j in vector_mapping:
-    #             continue
+    # # get correct word_line_dict
+    # final_important_word_list = list(set([x[1] for x in ind_word]))
+    # word_line_dict = get_important_packet_line_dict_by_important_word_for_cur_pcapng(new_op_name, final_important_word_list, new_pcapng_file_name)
+    # word_line_dict = word_line_dict[new_pcapng_file_name.split(".")[0]]
     #
-    #         # compute the similarity between two vector
-    #         similarity = similarity_matrix[i, j]
+    # # save in csv file and get important packet.number
+    # word_payload_dict = {}
+    # number_word_dict = {}
+    # with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "r") as file:
+    #     reader = csv.reader(file)
+    #     rows = list(reader)
+    # rows[0].append("final_select")
+    # for word, row_index in word_line_dict.items():
+    #     row_index = int(row_index)
+    #     rows[row_index].append("222")
     #
-    #         # mapping to the same word if computing value larger than similarity threshold
-    #         if similarity >= similarity_threshold:
-    #             vector_mapping[j] = current_string
+    #     if word not in word_payload_dict.keys():
+    #         word_payload_dict[word] = []
+    #     word_payload_dict[word].append([row_index, rows[row_index][0], rows[row_index][1]])
+    #     word_payload_dict[word].append([""])
     #
-    # mlog.log_func(mlog.LOG, "Total packets: " + max_word[4:])
+    #     if rows[row_index][1] != "":
+    #         number_word_dict[rows[row_index][1]] = word
+    #     else:
+    #         number_word_dict[rows[row_index][0]] = word
     #
-    # # save word in corresponding csv file
-    # total_index = 0
-    # for (docu_name, docu_num) in pcapng_order_and_length_dict.items():
-    #     op_name = docu_name[:0 - len(docu_name.split('_')[-1]) - 1]
-    #     if op_name not in result_document_of_each_pcapng.keys():
-    #         result_document_of_each_pcapng[op_name] = {}
-    #         result_document_of_each_pcapng[op_name]["aggregation"] = ""
-    #     result_document_of_each_pcapng[op_name][docu_name] = ""
+    # with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "w") as file:
+    #     writer = csv.writer(file)
+    #     writer.writerows(rows)
     #
-    #     # add new column for word
-    #     cur_csv_path = PACKET_ROOT_PATH + op_name + '/' + docu_name + '.csv'
-    #     new_column_name = "mapping_word"
-    #     with open(cur_csv_path, "r") as f:
-    #         reader = csv.reader(f)
+    # # read payload of important packets
+    # pcap = pyshark.FileCapture(pcapng_file_path, display_filter=FILTER_CONDITION,
+    #                            override_prefs={'ssl.keylog_file': keylog_file_path}, use_json=True)
+    # for packet in pcap:
+    #     if str(packet.number) in number_word_dict.keys():
+    #         for finding_index in range(0, len(word_payload_dict[number_word_dict[str(packet.number)]]), 2):
+    #             if str(packet.number) in word_payload_dict[number_word_dict[str(packet.number)]][finding_index]:
+    #                 word_payload_dict[number_word_dict[str(packet.number)]][finding_index + 1][0] += ("," + get_payload_from_packet(packet))
+    # pcap.close()
+    #
+    # # merge and split
+    # word_number_dict = dataset_payloads_dict.copy()
+    # word_number_dict.update({new_pcapng_file_name.split(".")[0]: word_payload_dict})
+    #
+    # entropy_threshold = 10
+    # word_number_dict = format_payload_str_by_entropy_and_pattern(word_number_dict, get_important_words_from_dataset(new_op_name), entropy_threshold, get_new_resp_flag=True)
+    #
+    # # use entropy to get class of new pcapng file(or equal relative)
+    # pcap_payload_list = []
+    # for concrete_pcapng_name, word_payload_dict in word_number_dict.items():
+    #     each_pcapng_payload_list = []
+    #     word_payload_dict = format_tools.sort_dict_by_key(word_payload_dict)
+    #     for word, value in word_payload_dict.items():
+    #         payload_list = []
+    #         for finding_index in range(1, len(value), 2):
+    #             payload_list.append(value[finding_index])
+    #         each_pcapng_payload_list.append(payload_list)
+    #     pcap_payload_list.append(each_pcapng_payload_list)
+    #
+    # class_result_list = my_classify.use_total_important_word_for_classifying(new_op_name, pcap_payload_list)
+    # ori_class_list = []
+    # new_file_class = None
+    # class_index = 0
+    # for concrete_pcapng_name in word_number_dict.keys():
+    #     if concrete_pcapng_name == new_pcapng_file_name.split(".")[0]:
+    #         new_file_class = class_result_list[class_index]
+    #     else:
+    #         ori_class_list.append(class_result_list[class_index])
+    #     class_index += 1
+    # ori_class_list = list(set(ori_class_list))
+    #
+    # # if new class appear, add it to dataset
+    # if new_file_class not in ori_class_list:
+    #     # save string in csv file
+    #     csv_file_path = PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name
+    #     new_header_name = "payload_str"
+    #     with open(csv_file_path, "r") as file:
+    #         reader = csv.reader(file)
     #         rows = list(reader)
-    #     header = rows[0]
-    #     header.append(new_column_name)
-    #     for i in range(docu_num):
-    #         result_document_of_each_pcapng[op_name][docu_name] += (vector_mapping[total_index] + ' ')
-    #         result_document_of_each_pcapng[op_name]["aggregation"] += result_document_of_each_pcapng[op_name][docu_name]
-    #         rows[i + 1].append(vector_mapping[total_index])
-    #         total_index += 1
-    #
-    #     with open(cur_csv_path, "w", newline="") as f:
-    #         writer = csv.writer(f)
+    #     rows[0].append(new_header_name)
+    #     for word in word_payload_dict.keys():
+    #         for finding_index in range(0, len(word_payload_dict[word]), 2):
+    #             line_number = int(word_payload_dict[word][finding_index][0])
+    #             rows[line_number].append(word_payload_dict[word][finding_index + 1])
+    #     with open(csv_file_path, "w") as file:
+    #         writer = csv.writer(file)
     #         writer.writerows(rows)
     #
-    # # free the memory
-    # vector_mapping.clear()
-
-
-    # '''
-    # ================================ module 3 ================================
-    # For each pcapng file, filter it's unimportant packet, read it's important packet and vectorize them.
-    # '''
-    # # get result_document_of_each_pcapng from csv file
-    # for pcapng_name in total_pcapng_file_list:
-    #     op_name = pcapng_name.split('_')[0]
-    #     abs_path = PACKET_ROOT_PATH + op_name + '/' + pcapng_name + ".csv"
-    #     if op_name not in result_document_of_each_pcapng.keys():
-    #         result_document_of_each_pcapng[op_name] = {}
-    #         result_document_of_each_pcapng[op_name]["aggregation"] = ""
-    #     result_document_of_each_pcapng[op_name][pcapng_name] = ""
-    #     with open(abs_path, "r") as file:
-    #         reader = csv.reader(file)
-    #         header = next(reader)
-    #         mapping_word_index = header.index("mapping_word")
-    #         for line in list(reader)[1:]:
-    #             result_document_of_each_pcapng[op_name][pcapng_name] += (' ' + line[mapping_word_index])
-    #         result_document_of_each_pcapng[op_name]["aggregation"] += (' ' + result_document_of_each_pcapng[op_name][pcapng_name])
+    #     # add to classify_result.json
+    #     with open(PACKET_ROOT_PATH + new_op_name + "/classify_result.json", "r") as file:
+    #         temp_class = json.load(file)
+    #     temp_class[new_pcapng_file_name.split(".")[0]] = new_file_class
+    #     with open(PACKET_ROOT_PATH + new_op_name + "/classify_result.json", "w") as file:
+    #         file.write(json.dumps(temp_class, indent=4))
     #
-    # # aggregation and fit vector
-    # aggre_list = []
-    # for op_name, value in result_document_of_each_pcapng.items():
-    #     if "aggregation" in value.keys():
-    #         aggre_list.append(value["aggregation"])
-    #
-    # vectorizer = TfidfVectorizer()
-    # tfidf_matrix = vectorizer.fit_transform(aggre_list)
-    #
-    # # get feature words list and calculate the threshold
-    # feature_names = vectorizer.get_feature_names_out()
-    # tfidf_value = tfidf_matrix.toarray().sum(axis=0).tolist()
-    #
-    # # get total word counts
-    # hist, bin_edges = np.histogram(tfidf_value, bins=10)
-    # total_count = np.sum(hist)
-    # select_value_count = 0
-    # for i in range(len(hist)):
-    #     select_value_count += hist[i]
-    #     if select_value_count/total_count > 0.6:
-    #         high_line = bin_edges[i + 1]
-    #         break
-    # mlog.log_func(mlog.LOG, "Total words: " + str(total_count))
-    # filtered_data = [value for value in tfidf_value if value <= high_line]
-    # # print(np.mean(filtered_data))
-    #
-    # min_threshold = np.mean(filtered_data)
-    # mlog.log_func(mlog.LOG, "TF-IDF threshold = (" + str(min_threshold) + " ~ " + "max)")
-    #
-    # for temp_index in range(len(feature_names)):
-    #     print(feature_names[temp_index], tfidf_value[temp_index])
-    #
-    # important_words = []
-    # for temp_index in range(len(feature_names)):
-    #     if tfidf_value[temp_index] >= min_threshold:
-    #         important_words.append(feature_names[temp_index])
-    # important_words = list(set(important_words))
-    # mlog.log_func(mlog.LOG, "Key words selected from (mean ~ max): " + str(len(important_words)))
-    #
-    # final_important_word_dict = get_final_important_words_for_each_op(list(result_document_of_each_pcapng.keys()), important_words)
-    #
-    # for op_name in final_important_word_dict.keys():
-    #     final_import_word_list = final_important_word_dict[op_name]
-    #     pcap_word_line_dict = get_important_packet_line_dict_by_important_word_for_cur_pcapng(op_name, final_import_word_list)
-    #     final_import_word_list = list(pcap_word_line_dict[list(pcap_word_line_dict.keys())[0]].keys())
-    #     with open(PACKET_ROOT_PATH + op_name + "/important_words.txt", "w") as imp_word_file:
-    #         imp_word_file.write(' | '.join(final_import_word_list))
-    #     mlog.log_func(mlog.LOG, "Final important words in " + op_name + ": " + ' | '.join(final_import_word_list))
-    #
-    #     # save in csv files and get packet number(req and resp)
-    #     word_number_dict = {}
-    #     for pcapng_name in pcap_word_line_dict.keys():
-    #         cur_csv_path = PACKET_ROOT_PATH + op_name + '/' + pcapng_name + ".csv"
-    #
-    #         with open(cur_csv_path, "r") as f:
-    #             reader = csv.reader(f)
-    #             rows = list(reader)
-    #         rows[0].append("final_select")
-    #         mapping_word_index = rows[0].index("mapping_word")
-    #
-    #         number_word_dict = {}
-    #         if pcapng_name not in word_number_dict.keys():
-    #             word_number_dict[pcapng_name] = {}
-    #         for word in pcap_word_line_dict[pcapng_name].keys():
-    #             i = pcap_word_line_dict[pcapng_name][word]
-    #             rows[i].append("222")
-    #
-    #             if rows[i][mapping_word_index] not in word_number_dict[pcapng_name]:
-    #                 word_number_dict[pcapng_name][rows[i][mapping_word_index]] = []
-    #             word_number_dict[pcapng_name][rows[i][mapping_word_index]].append([i, rows[i][0], rows[i][1]])
-    #             word_number_dict[pcapng_name][rows[i][mapping_word_index]].append([""])
-    #
-    #             if rows[i][1] != "":
-    #                 number_word_dict[rows[i][1]] = word
-    #             else:
-    #                 number_word_dict[rows[i][0]] = word
-    #
-    #         with open(cur_csv_path, "w") as f:
-    #             writer = csv.writer(f)
-    #             writer.writerows(rows)
-    #
-    #         '''
-    #         deep packet analyse for classify
-    #         '''
-    #         cur_pcapng_path = cur_csv_path[:-3] + "pcapng"
-    #         cur_key_path = cur_csv_path[:-3] + "txt"
-    #
-    #         pcap = pyshark.FileCapture(cur_pcapng_path, display_filter=FILTER_CONDITION,
-    #                                    override_prefs={'ssl.keylog_file': cur_key_path}, use_json=True)
-    #         for packet in pcap:
-    #             if str(packet.number) in number_word_dict.keys():
-    #                 cor_word = number_word_dict[str(packet.number)]
-    #                 for finding_index in range(0, len(word_number_dict[pcapng_name][cor_word]), 2):
-    #                     if str(packet.number) in word_number_dict[pcapng_name][cor_word][finding_index]:
-    #                         word_number_dict[pcapng_name][cor_word][finding_index + 1][0] += (
-    #                                 "," + get_payload_from_packet(packet))
-    #         pcap.close()
-    #
-    #     '''
-    #     ================================ module 4 ================================
-    #     For each pcapng file, calculate the entropy of the same field in corresponding packet(vectorized in the same word)
-    #     filter out the field which has obviously higher than others, such as "timestamp".
-    #     '''
-    #     # use abstract str to exchange field which has high entropy and pattern
-    #     sig_threshold = 20
-    #     word_number_dict = format_payload_str_by_entropy_and_pattern(word_number_dict, final_import_word_list, sig_threshold)
-    #
-    #     for pcapng_name in word_number_dict.keys():
-    #         # save payload in csv file
-    #         csv_file_path = PACKET_ROOT_PATH + pcapng_name.split("_")[0] + "/" + pcapng_name + ".csv"
-    #         new_header_name = "payload_str"
-    #         with open(csv_file_path, "r") as file:
-    #             reader = csv.reader(file)
-    #             rows = list(reader)
-    #         rows[0].append(new_header_name)
-    #
-    #         for word in word_number_dict[pcapng_name]:
-    #             for finding_index in range(0, len(word_number_dict[pcapng_name][word]), 2):
-    #                 line_number = int(word_number_dict[pcapng_name][word][finding_index][0])
-    #                 rows[line_number].append(word_number_dict[pcapng_name][word][finding_index + 1])
-    #
-    #         with open(csv_file_path, "w") as file:
-    #             writer = csv.writer(file)
-    #             writer.writerows(rows)
-    #
-    #     # classify
-    #     pcap_payload_list = []
-    #     for concrete_pcapng_name, word_payload_dict in word_number_dict.items():
-    #         each_pcapng_payload_list = []
-    #         word_payload_dict = format_tools.sort_dict_by_key(word_payload_dict)
-    #         for word, value in word_payload_dict.items():
-    #             payload_list = []
-    #             for finding_index in range(1, len(value), 2):
-    #                 payload_list.append(value[finding_index])
-    #             each_pcapng_payload_list.append(payload_list)
-    #         pcap_payload_list.append(each_pcapng_payload_list)
-    #
-    #     class_result_list = my_classify.use_total_important_word_for_classifying(op_name, pcap_payload_list)
-    #     result_dict = {}
-    #     class_index = 0
-    #     for concrete_pcapng_name, word_payload_dict in word_number_dict.items():
-    #         result_dict[concrete_pcapng_name] = class_result_list[class_index]
-    #         class_index += 1
-    #
-    #     result_dict = format_tools.sort_dict_by_key(result_dict)
-    #
-    #     result_json_file_path = PACKET_ROOT_PATH + op_name + "/classify_result.json"
-    #     with open(result_json_file_path, "w") as f:
-    #         f.write(json.dumps(result_dict, indent=4))
-
-
-# def get_new_op_class_for_response(new_pcapng_file_name):
-#     """
-#     Giving a new pcapng file of an operation, get it's abstract class
-#     :param new_pcapng_file_name: pcapng_file under classifying, such as "SA_111.pcapng"
-#     :return: abstract class for response
-#     """
-#     mlog.log_func(mlog.LOG, "Parse new pcapng_file: " + new_pcapng_file_name + " ......")
-#     new_op_name = new_pcapng_file_name.split("_")[0]
-#     pcapng_file_path = PACKET_ROOT_PATH + new_op_name + "/" + new_pcapng_file_name
-#     keylog_file_path = pcapng_file_path[:-6] + "txt"
-#
-#     # read pcapng file
-#     pcap = pyshark.FileCapture(pcapng_file_path, display_filter=FILTER_CONDITION,
-#                                override_prefs={'ssl.keylog_file': keylog_file_path})
-#
-#     # for each packet, extract its header features and save in corresponding csv file
-#     new_csv_name, new_file_header_features, packet_number = get_header_features(pcap, new_pcapng_file_name)
-#     pcap.close()
-#
-#     # get features from feature dataset, vectorize and mapping to word
-#     dataset_imp_features, dataset_imp_cor_words = get_header_features_from_dataset(new_op_name)
-#     total_features = dataset_imp_features + new_file_header_features
-#     feature_vectors = vectorize_features(total_features)
-#
-#     # mapping
-#     ind_word = []
-#     for mapping_index in range(len(dataset_imp_cor_words), len(total_features)):
-#         for finding_index in range(len(dataset_imp_features)):
-#             if cosine_similarity(feature_vectors[mapping_index], feature_vectors[finding_index]) > similarity_threshold:
-#                 ind_word.append((mapping_index - len(dataset_imp_cor_words), dataset_imp_cor_words[finding_index]))
-#                 break
-#
-#     # save mapping result in csv file
-#     with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "r") as file:
-#         reader = csv.reader(file)
-#         rows = list(reader)
-#     rows[0].append("mapping_word")
-#     for row_index, word in ind_word:
-#         rows[row_index + 1].append(word)
-#     with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "w") as file:
-#         writer = csv.writer(file)
-#         writer.writerows(rows)
-#
-#     # get pre-parse payloads
-#     dataset_payloads_dict = get_payload_from_preprogress_dataset(new_op_name)
-#
-#     # get correct word_line_dict
-#     final_important_word_list = list(set([x[1] for x in ind_word]))
-#     word_line_dict = get_important_packet_line_dict_by_important_word_for_cur_pcapng(new_op_name, final_important_word_list, new_pcapng_file_name)
-#     word_line_dict = word_line_dict[new_pcapng_file_name.split(".")[0]]
-#
-#     # save in csv file and get important packet.number
-#     word_payload_dict = {}
-#     number_word_dict = {}
-#     with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "r") as file:
-#         reader = csv.reader(file)
-#         rows = list(reader)
-#     rows[0].append("final_select")
-#     for word, row_index in word_line_dict.items():
-#         row_index = int(row_index)
-#         rows[row_index].append("222")
-#
-#         if word not in word_payload_dict.keys():
-#             word_payload_dict[word] = []
-#         word_payload_dict[word].append([row_index, rows[row_index][0], rows[row_index][1]])
-#         word_payload_dict[word].append([""])
-#
-#         if rows[row_index][1] != "":
-#             number_word_dict[rows[row_index][1]] = word
-#         else:
-#             number_word_dict[rows[row_index][0]] = word
-#
-#     with open(PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name, "w") as file:
-#         writer = csv.writer(file)
-#         writer.writerows(rows)
-#
-#     # read payload of important packets
-#     pcap = pyshark.FileCapture(pcapng_file_path, display_filter=FILTER_CONDITION,
-#                                override_prefs={'ssl.keylog_file': keylog_file_path}, use_json=True)
-#     for packet in pcap:
-#         if str(packet.number) in number_word_dict.keys():
-#             for finding_index in range(0, len(word_payload_dict[number_word_dict[str(packet.number)]]), 2):
-#                 if str(packet.number) in word_payload_dict[number_word_dict[str(packet.number)]][finding_index]:
-#                     word_payload_dict[number_word_dict[str(packet.number)]][finding_index + 1][0] += ("," + get_payload_from_packet(packet))
-#     pcap.close()
-#
-#     # merge and split
-#     word_number_dict = dataset_payloads_dict.copy()
-#     word_number_dict.update({new_pcapng_file_name.split(".")[0]: word_payload_dict})
-#
-#     entropy_threshold = 10
-#     word_number_dict = format_payload_str_by_entropy_and_pattern(word_number_dict, get_important_words_from_dataset(new_op_name), entropy_threshold, get_new_resp_flag=True)
-#
-#     # use entropy to get class of new pcapng file(or equal relative)
-#     pcap_payload_list = []
-#     for concrete_pcapng_name, word_payload_dict in word_number_dict.items():
-#         each_pcapng_payload_list = []
-#         word_payload_dict = format_tools.sort_dict_by_key(word_payload_dict)
-#         for word, value in word_payload_dict.items():
-#             payload_list = []
-#             for finding_index in range(1, len(value), 2):
-#                 payload_list.append(value[finding_index])
-#             each_pcapng_payload_list.append(payload_list)
-#         pcap_payload_list.append(each_pcapng_payload_list)
-#
-#     class_result_list = my_classify.use_total_important_word_for_classifying(new_op_name, pcap_payload_list)
-#     ori_class_list = []
-#     new_file_class = None
-#     class_index = 0
-#     for concrete_pcapng_name in word_number_dict.keys():
-#         if concrete_pcapng_name == new_pcapng_file_name.split(".")[0]:
-#             new_file_class = class_result_list[class_index]
-#         else:
-#             ori_class_list.append(class_result_list[class_index])
-#         class_index += 1
-#     ori_class_list = list(set(ori_class_list))
-#
-#     # if new class appear, add it to dataset
-#     if new_file_class not in ori_class_list:
-#         # save string in csv file
-#         csv_file_path = PACKET_ROOT_PATH + new_op_name + "/" + new_csv_name
-#         new_header_name = "payload_str"
-#         with open(csv_file_path, "r") as file:
-#             reader = csv.reader(file)
-#             rows = list(reader)
-#         rows[0].append(new_header_name)
-#         for word in word_payload_dict.keys():
-#             for finding_index in range(0, len(word_payload_dict[word]), 2):
-#                 line_number = int(word_payload_dict[word][finding_index][0])
-#                 rows[line_number].append(word_payload_dict[word][finding_index + 1])
-#         with open(csv_file_path, "w") as file:
-#             writer = csv.writer(file)
-#             writer.writerows(rows)
-#
-#         # add to classify_result.json
-#         with open(PACKET_ROOT_PATH + new_op_name + "/classify_result.json", "r") as file:
-#             temp_class = json.load(file)
-#         temp_class[new_pcapng_file_name.split(".")[0]] = new_file_class
-#         with open(PACKET_ROOT_PATH + new_op_name + "/classify_result.json", "w") as file:
-#             file.write(json.dumps(temp_class, indent=4))
-#
-#     mlog.log_func(mlog.LOG, "Parse finish, get response: " + new_file_class)
-#     return new_file_class
+    # mlog.log_func(mlog.LOG, "Parse finish, get response: " + new_file_class)
+    # return new_file_class
 
 
 if __name__ == "__main__":
@@ -1074,19 +1164,24 @@ if __name__ == "__main__":
     import time
 
     start_time = time.time()
-    pre_parse()
+    # pre_parse(get_dataset_name_list())
+    pre_parse(["manual_dataset_1708329730"])
     end_time = time.time()
     print("time: ", end_time - start_time)
     print("============================")
 
-    # new_pcapng_file = "SAU1CWRU2_1701697275.pcapng"
-    # with open(PACKET_ROOT_PATH + new_pcapng_file.split("_")[0] + "/classify_result.json", "r") as file:
-    #     classify_json = json.load(file)
-    # if new_pcapng_file.split(".")[0] in classify_json.keys():
-    #     classify_json.pop(new_pcapng_file.split(".")[0])
-    #     with open(PACKET_ROOT_PATH + new_pcapng_file.split("_")[0] + "/classify_result.json", "w") as file:
-    #         file.write(json.dumps(classify_json, indent=4))
-    #
+    # # read pcap file and get
+    # dataset_path = PACKET_ROOT_PATH + "manual_dataset_1706001324/"
+    # pcap = pyshark.FileCapture(dataset_path + "manual_dataset_1706001324.pcapng", use_json=True,
+    #                            override_prefs={'ssl.keylog_file': dataset_path + "manual_dataset_1706001324.txt"})
+    # for packet in pcap:
+    #     # if "json" in packet:
+    #     #     get_payload_from_packet(packet)
+    #     if packet.number == "8696" or packet.number == 5619:
+    #         get_payload_from_packet(packet)
+    #         break
+    # pcap.close()
+
     # start_time = time.time()
     # print(get_new_op_class_for_response(new_pcapng_file))  # 0
     # end_time = time.time()

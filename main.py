@@ -10,7 +10,8 @@ def start_main():
     mlog.clear_log()
     mlog.log_func(mlog.LOG, "Welcome!!! Testing program is come to start now")
 
-    mlog.log_func(mlog.LOG, "Start analysing appcrawler result")
+
+    mlog.log_func(mlog.LOG, "Start analysing app ui result")
     scan_folder_name = analyse.analyse_main("com.huawei.smarthome")
 
     '''start random click'''

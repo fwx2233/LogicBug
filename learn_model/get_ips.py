@@ -103,9 +103,14 @@ def merge_manual_ip_list(ip_list_by_script: list):
         lines = f.readlines()
         for line in lines:
             new_ip = line.replace("\n", "")
-            if new_ip:
+            if new_ip and new_ip not in ip_list_by_script:
                 ip_list_by_script.append(new_ip)
-    ip_list_by_script = list(set(ip_list_by_script))
+    ip_list_by_script = sorted(list(set(ip_list_by_script)))
+
+    with open(manual_file, "w") as f:
+        for item in ip_list_by_script:
+            f.write(item + "\n")
+
     return ip_list_by_script
 
 
@@ -123,6 +128,14 @@ def generate_filter_condition_by_ip_list(ip_list):
     result_condition += " or udp)"
     # result_condition += ")"
     return result_condition
+
+
+def get_and_save_ip_list_by_apk(apk_name):
+    pid_list, username = get_pid_and_username(apk_name)
+    ip_list = get_ips_by_username(username)
+    ip_list = merge_manual_ip_list(ip_list)
+
+    return ip_list
 
 
 if __name__ == "__main__":

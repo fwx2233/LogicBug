@@ -1,7 +1,8 @@
 feature_dict = {
-    "record": ["number", "response_number", "udp_stream"],
-    "common": ["ip1", "port1", "ip2", "port2", "protocol"],
-    "http": ["request_method", "request_uri", "host"],
+    "record": ["number", "response_number"],
+    "common": ["src", "srcport", "dst", "domain", "dstport", "protocol"],
+    "http": ["request_method", "host", "request_uri"],
     "mqtt": ["hdrflags", "topic"],
-    "udp": ["request_length", "response_length"],
+    # "udp": ["request_length", "response_length"],
+    "udp": ["length"],
 }
