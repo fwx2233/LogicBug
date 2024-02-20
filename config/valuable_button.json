@@ -1,13 +1,4 @@
 {
-  "demo": {
-    "1": {
-      "xpath": "",
-      "act_before": "",
-      "act_after": "",
-      "waiting_time": 0,
-      "description": ""
-    }
-  },
   "add_scene": {
     "1": {
       "resource_id": "com.huawei.smarthome:id/iv_deviceadd",
@@ -211,7 +202,6 @@
       "description": "click share button"
     }
   },
-  "link_accounts": {},
   "view_device1's_status": {
     "1": {
       "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup",
@@ -261,7 +251,7 @@
       "xpath": "//android.widget.TextView[@content-desc='user2']",
       "act_before": "com.google.android.apps.contacts.activities.ContactSelectionActivity",
       "act_after": ".family.activity.ChoiceSharedMemberActivity",
-      "description": "select user1 for test"
+      "description": "select user2 for test"
     },
     "8": {
       "xpath": "//android.widget.ImageView[@content-desc='OK']",
@@ -340,6 +330,22 @@
       "act_before": ".activity.MainActivity",
       "act_after": ".activity.MainActivity",
       "description": "turn off/on the device"
+    }
+  },
+  "Special": {
+    "BackHome": {
+      "1": {
+        "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.LinearLayout[1]/android.widget.LinearLayout",
+        "act_before": ".activity.MainActivity",
+        "act_after": ".activity.MainActivity",
+        "description": "click 'Home' button"
+      },
+      "2": {
+        "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.LinearLayout/android.widget.HorizontalScrollView/android.widget.LinearLayout/android.widget.TextView[1]",
+        "act_before": ".activity.MainActivity",
+        "act_after": ".activity.MainActivity",
+        "description": "click 'Devices' button"
+      }
     }
   }
 }

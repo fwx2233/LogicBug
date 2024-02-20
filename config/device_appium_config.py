@@ -14,7 +14,8 @@ device_configs = {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
             "wirelessCard": "wlxc01c30151c62",
             "port": 4723,
-            "appium_ip": "http://127.0.0.1:4723/wd/hub"
+            "appium_ip": "http://127.0.0.1:4723/wd/hub",
+            "phone_ip": "10.42.0.15"
         }
     },
     "pixel7": {
@@ -30,7 +31,8 @@ device_configs = {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
             "wirelessCard": "wlxc01c30151c62",
             "port": 4724,
-            "appium_ip": "http://127.0.0.1:4724/wd/hub"
+            "appium_ip": "http://127.0.0.1:4724/wd/hub",
+            "phone_ip": "10.42.0.230"
         }
     }
 }
