@@ -5,14 +5,14 @@ import os
 ROOT_PATH = os.path.dirname(__file__)
 
 
-def get_pid_and_username(apk_name):
+def get_pid_and_username(apk_name, device_udid):
     """
     Retrieve the PID and running username of the package named 'apk_name' when running on a mobile phone
     :param apk_name: apk_name, such as: com.x.y
     :return: pid_list->list, username->str
     """
     ps_file = ROOT_PATH + "/temp_ps.txt"
-    command = "adb shell ps |grep " + apk_name + " > " + ps_file
+    command = f"adb -s {device_udid} shell ps |grep {apk_name} > {ps_file}"
     # temp_proc = subprocess.Popen(command.split())
     os.system(command)
 
@@ -29,14 +29,14 @@ def get_pid_and_username(apk_name):
     return pid_list, username
 
 
-def get_ips_by_username(username):
+def get_ips_by_username(username, device_udid):
     """
     Retrieve all IP addresses accessed by username.
     :param username: username
     :return:[ip_list]
     """
     output_file = ROOT_PATH + "/output.txt"
-    command = "adb shell netstat -e |grep " + username + " > " + output_file
+    command = f"adb -s {device_udid} shell netstat -e |grep {username} > {output_file}"
     os.system(command)
 
     ip_list = []
@@ -54,14 +54,14 @@ def get_ips_by_username(username):
     return ip_list
 
 
-def get_ips_by_pid(pid):
+def get_ips_by_pid(pid, device_udid):
     """
     Retrieve all IP addresses accessed by PID.
     :param pid: PID
     :return: [ip_list]
     """
     output_file = ROOT_PATH + "/output.txt"
-    command = "adb shell netstat -nlp |grep " + pid + " > " + output_file
+    command = f"adb -s {device_udid} shell netstat -nlp |grep {pid} > {output_file}"
     os.system(command)
 
     ip_list = []
@@ -130,9 +130,10 @@ def generate_filter_condition_by_ip_list(ip_list):
     return result_condition
 
 
-def get_and_save_ip_list_by_apk(apk_name):
-    pid_list, username = get_pid_and_username(apk_name)
-    ip_list = get_ips_by_username(username)
+def get_and_save_ip_list_by_apk(apk_name, device_udid):
+    print("Reading ip list that apk has visited")
+    pid_list, username = get_pid_and_username(apk_name, device_udid)
+    ip_list = get_ips_by_username(username, device_udid)
     ip_list = merge_manual_ip_list(ip_list)
 
     return ip_list

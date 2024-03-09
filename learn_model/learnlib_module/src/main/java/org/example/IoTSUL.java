@@ -6,37 +6,63 @@ import net.automatalib.words.impl.GrowingMapAlphabet;
 public class IoTSUL implements SUL<String, String> {
     GrowingMapAlphabet<String> alphabet;
     NetworkManager network;
-    public IoTSUL(LearnConfiguration config, NetworkManager network) {
+    CacheManager cache;
+    boolean useCache;
+    int currentReset;
+    public IoTSUL(LearnConfiguration config, NetworkManager network, CacheManager cache) {
         // TODO 初始化 SUL
         alphabet = new GrowingMapAlphabet<>(config.aM.words);
         this.network = network;
+        this.cache = cache;
+        currentReset = 0;
+        this.useCache = config.useCache;
     }
 
     public GrowingMapAlphabet<String> getAlphabet() {
         return alphabet;
     }
 
-    // 重写SUL接口函数，推动系统向下运行
+    public void restartSUL() {
+        currentReset = 0;
+        useCache = true;
+    }
+
+    // Rewrite the SUL interface function to push the system down
     @Override
     public String step(String symbol) {
         String result = null;
         try {
-            // TODO 处理字符函数，需要使用 Socket 交互模块
-            result = network.sendQuery(symbol);
-            LogManager.logger.logQuery("Step: " + symbol + " - Result: " + result);
+            // To process character functions, you need to use the Socket interaction module
+            LogManager.logger.logEvent("[STEP] " + symbol);
+            if (useCache) {
+                result = cache.get(symbol);
+                LogManager.logger.logQuery("[CACHE] Step: " + symbol + " - Result: " + result);
+            }else {
+                result = network.sendQuery(NetworkManager.QUERY_MESSAGE, symbol);
+                cache.add(symbol, result);
+                LogManager.logger.logQuery("[QUERY] Step: " + symbol + " - Result: " + result);
+            }
         } catch (Exception e) {
-            LogManager.logger.logEvent("Step fail: " + symbol);
+            LogManager.logger.logEvent("[WRONG] Step fail: " + symbol);
         }
         return result;
     }
-    // 重写SUL接口函数，初始化目标系统
+    // Rewrite the SUL interface function to initialize the target system
     @Override
     public void pre() {
         try {
             // TODO 重置 Reset 函数
-            network.sendQuery("Reset");
+            LogManager.logger.logEvent("[RESET]");
+            currentReset++;
+            if (!useCache || currentReset > cache.getResetNum()) {
+                useCache = false;
+                network.sendQuery(NetworkManager.LEARNLIB_MESSAGE, "Reset");
+                cache.writeCache(false);
+            } else {
+                LogManager.logger.logEvent("[CACHE] Reset");
+            }
         } catch (Exception e) {
-            LogManager.logger.logEvent("Reset fail");
+            LogManager.logger.logEvent("[WRONG] Reset fail");
             throw new RuntimeException(e);
         }
     }

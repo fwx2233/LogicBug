@@ -1,0 +1,31 @@
+{
+  "domain": [
+    "time.android.com",
+    "www.google.com",
+    "play.googleapis.com",
+    "openapi.vmall.com",
+    "metrics1-drcn.dt.dbankcloud.cn",
+    "terms1.hicloud.com",
+    "store1.hispace.hicloud.com",
+    "store.hispace.hicloud.com",
+    "logservice1.dbankcloud.cn",
+    "nsp-logservice-hiview-p43-drcn.obs.cn-north-2.myhuaweicloud.com"
+  ],
+  "ip": [
+    "10.42.0.1",
+    "238.238.238.238"
+  ],
+  "request_uri": [
+    "/opr-manager/v1/award/consumption",
+    "/opr-manager/v2/award/list",
+    "/opr-manager/v1/award/exchange/smarthome20221108",
+    "/opr-manager/v1/award/all",
+    "/opr-manager/v1/award/lotteries/8a84b9cb8907b72201890b31539c076f",
+    "/opr-manager/v2/activities",
+    "/mcp/account/refreshTokenLogin",
+    "/csrftoken.js",
+    "/smart-life/v2/banner/info",
+    "/device/guide/domains/ailife/201910/domains.json",
+    "/trs/v1/app/route/select"
+  ]
+}

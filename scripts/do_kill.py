@@ -92,5 +92,5 @@ def kill_frida():
 # stop tshark and chmod
 kill_tshark()
 kill_appium()
-kill_mitm()
+# kill_mitm()
 kill_frida()

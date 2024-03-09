@@ -5,13 +5,18 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public class NetworkManager {
-    ServerSocket serverSocket;
-    Socket clientSocket;
-    OutputStream out;
-    InputStream in;
+    protected static final int SYSTEM_MESSAGE = 0;
+    protected static final int LEARNLIB_MESSAGE = 1;
+    protected static final int QUERY_MESSAGE = 2;
+    private ServerSocket serverSocket;
+    private Socket clientSocket;
+    private OutputStream out;
+    private InputStream in;
     public NetworkManager(LearnConfiguration conf) throws IOException {
         try {
             serverSocket = new ServerSocket(conf.port);
@@ -33,12 +38,12 @@ public class NetworkManager {
         sendAlphabetRequest();
     }
 
-    public String sendQuery(String query) throws IOException {
-        return new String(sendMessage(1, query));
+    public String sendQuery(int type, String query) throws IOException {
+        return new String(sendMessage(type, query));
     }
 
     private void sendAlphabetRequest() throws IOException {
-        sendMessage(0, "alphabet");
+        sendMessage(SYSTEM_MESSAGE, "alphabet");
     }
 
     private byte[] sendMessage(int type, String message) throws IOException {
@@ -54,8 +59,8 @@ public class NetworkManager {
         out.write(totalBytes);
 //        LogManager.logger.logEvent(Arrays.toString(totalBytes));
 
-        if (type == 0)
-            LogManager.logger.logEvent("Sent successfully!");
+        if (type == SYSTEM_MESSAGE)
+            LogManager.logger.logEvent("Sent system message (" + message + ") successfully!");
 
         return receiveMessage(type);
     }
@@ -68,17 +73,49 @@ public class NetworkManager {
         byte receiveType = receiveMessage[0];
         byte[] messageBytes = new byte[bytesReceive - 1];
         System.arraycopy(receiveMessage, 1, messageBytes, 0, bytesReceive - 1);
-        String message = new String(messageBytes);//LogManager.logger.logEvent(message);
+        String message = new String(messageBytes);
 
-        if (type == 0 && (int)receiveType == 0) {
-            // TODO 当消息发送和接收类型都与字符表相关，对字符串进行判断
-            if (message.equals("Succeed!")) {
-                LogManager.logger.logEvent(message);
-            }
-        } else if (type == 1) {
-            LogManager.logger.logEvent("Response: " + message);
+        // Process the message
+        if (receiveType > type) {
+            LogManager.logger.logEvent("Receive lower type message");
+            return "stop".getBytes();
+        }
+        switch (receiveType) {
+            case SYSTEM_MESSAGE:
+                LogManager.logger.logSystem(message);
+                break;
+            case LEARNLIB_MESSAGE:
+            case QUERY_MESSAGE:
+                LogManager.logger.logQuery(message);
+                break;
+            default:
+                LogManager.logger.logEvent("Wrong type message");
         }
 
         return messageBytes;
     }
+
+    public List<String> checkCounterExample(List<String> symbols) throws IOException {
+        sendMessage(LEARNLIB_MESSAGE, "checkCounterExample");
+        List<String> result = new ArrayList<>();
+        System.out.println("symbols: " + symbols);
+        System.out.println("result: " + result);
+        for (String symbol : symbols) {
+            if (Objects.equals(symbol, "Reset")) {
+                result.add(sendQuery(LEARNLIB_MESSAGE, symbol));
+            }
+            else {
+                result.add(sendQuery(QUERY_MESSAGE, symbol));
+            }
+        }
+        LogManager.logger.logQuery(result.toString());
+        return result;
+    }
+
+    public void closeConnection() throws IOException {
+        sendMessage(SYSTEM_MESSAGE, "closeConnect");
+        clientSocket.close();
+        LogManager.logger.logEvent("Close the connection");
+    }
+
 }

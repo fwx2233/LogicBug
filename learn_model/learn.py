@@ -13,35 +13,17 @@ import socket
 import subprocess, signal
 import shutil
 
-import format_tools
+from learn_model import format_tools, packet_parser, get_ips
 from log import mlog
-import packet_parser
-import get_ips
-from config import device_appium_config
-from my_check import check_if_frida_server_is_start
+from config import device_appium_config, button_constrain
+from learn_model.my_check import check_if_frida_server_is_start
 
-
-manually_flag = True
-test_count = 1
-# test_button_list = ['ADU1CWRD88:97:46:2C:9A:CE', 'RDU1CWRD88:97:46:2C:9A:CE']
-# custom_order_dict = {}
 test_button_list = ['ADU1CWRD88:97:46:2C:9A:CE', 'SDU1CWRU2D88:97:46:2C:9A:CE', 'SAU1CWRU2', 'USU1CWRU2',
                     'RDU1CWRD88:97:46:2C:9A:CE', 'DCU1']
 custom_order_dict = {
     'ADU1CWRD88:97:46:2C:9A:CE': 0,
     'RDU1CWRD88:97:46:2C:9A:CE': len(test_button_list) - 1
 }
-
-
-def get_valuable_button(button_conf_file) -> dict:
-    with open(button_conf_file, "r") as f:
-        valuable_button_click_path = json.load(f)
-
-    return valuable_button_click_path
-
-
-def get_button_list(button_config_file):
-    return list(get_valuable_button(button_config_file).keys())
 
 
 def random_list(button_list: list) -> list:
@@ -86,8 +68,10 @@ def generate_random_click_order_with_count(valuable_button_list: list, each_leas
     return random_list(return_list)
 
 
-class LearnCls:
-    def __init__(self, scan_folder_name, device_name):
+class DeviceCls:
+    def __init__(self, scan_folder_name, device_name, which_user, frida_flag=True):
+        mlog.log_func(mlog.LOG, f"Current device: <{device_name}>, regarded as user: <{which_user}>")
+
         # paths
         self.ROOT_PATH = os.path.dirname(__file__)
         self.LOG_FOLDER_PATH = self.ROOT_PATH + "/../log/"
@@ -98,7 +82,6 @@ class LearnCls:
         self.ACT_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/act_tg_" + scan_folder_name + ".json"
         self.ADD_TG_FILE = self.ROOT_PATH + "/../analyse_app/temp_scan_result/additional_tg_" + scan_folder_name + ".json"
         self.VALUABLE_BUTTON_FILE = self.CONF_FOLDER_PATH + "valuable_button.json"
-        # self.APPIUM_PATH = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
         self.APPIUM_PATH = device_appium_config.appium_path
 
         # get config of device
@@ -108,60 +91,87 @@ class LearnCls:
             print("Device_name list: ", device_appium_config.get_device_list())
             exit(10)
 
+        self.USER = which_user
+
         self.APK_NAME = self.DEVICE_CONFIG_DICT["appPackage"]
         self.APPIUM_IP = self.DEVICE_CONFIG_DICT["additionalMess"]["appium_ip"]
         self.APPIUM_PORT = self.DEVICE_CONFIG_DICT["additionalMess"]["port"]
         self.HOME_PAGE_ACT = self.DEVICE_CONFIG_DICT["additionalMess"]["homePage"]
         self.WIRELESS_CARD = self.DEVICE_CONFIG_DICT["additionalMess"]["wirelessCard"]
         self.APP_ACTIVITY = self.DEVICE_CONFIG_DICT["appActivity"]
+        self.UDID = self.DEVICE_CONFIG_DICT["udid"]
 
+        self.DEVICE_CONFIG_DICT_FOR_APPIUM = dict()
         # remove additional message
-        del self.DEVICE_CONFIG_DICT["additionalMess"]
+        for key in self.DEVICE_CONFIG_DICT:
+            if key != "additionalMess":
+                self.DEVICE_CONFIG_DICT_FOR_APPIUM[key] = self.DEVICE_CONFIG_DICT[key]
+
+        # get valuable_buttion_dict
+        self.val_but_dict = self.get_valuable_button(self.VALUABLE_BUTTON_FILE, self.USER)
 
         # modify wireless card message in script
         self.modify_mitm_script()
-        self.modify_frida_script()
+
 
         # start appium for listen
-        mlog.log_func(mlog.LOG, "Start appium service....")
         self.start_appium_server(self.APPIUM_PATH)
-        time.sleep(3)
+        time.sleep(2)
 
-        mlog.log_func(mlog.LOG, "Start frida to ban the SSL Pinning")
-        self.start_frida_hook()
-        time.sleep(3)
+        if frida_flag:
+            self.modify_frida_script()
 
-        # communication information
-        self.LOCAL_IP = ""
-        self.LOCAL_PORT = 7009
-        self.SERVER_IP = "127.0.0.1"
-        self.SERVER_PORT = 9999
-        self.SOCKET = ""
+        if frida_flag:
+            self.start_frida_hook()
+            time.sleep(10)
 
         # test flag and other info
         self.update_act_flag = False
         self.admin_password = "admin"
         self.cur_packet_name = ""
+        self.cur_packet_folder = ""
         self.cur_packet_path = ""
 
+    def get_valuable_button(self, button_conf_file, user) -> dict:
+        with open(button_conf_file, "r") as f:
+            valuable_button_click_path = json.load(f)
+
+        if user not in valuable_button_click_path:
+            mlog.log_func(mlog.ERROR, f"{user} is not in valuable_buttion.json")
+            exit(-2)
+
+        return valuable_button_click_path[user]
+
     def modify_mitm_script(self):
+        mlog.log_func(mlog.LOG, "Modify mitm script")
+        self.cur_key_log_file_path = self.PACKET_ROOT_PATH + 'sslkeylogfile.txt'
+
         # modify script
         lines = []
         with open(self.SCRIPTS_FOLDER + "launch_mitm.bash", "r") as f:
             for line in f.readlines():
                 lines.append(line)
-        lines[1] = 'WIRELESS_CARD="' + self.WIRELESS_CARD + '"\n'
+        # lines[1] = 'WIRELESS_CARD="' + self.WIRELESS_CARD + '"\n'
         lines[2] = 'KEY_LOG_FILE="' + self.PACKET_ROOT_PATH + 'sslkeylogfile.txt"\n'
         with open(self.SCRIPTS_FOLDER + "launch_mitm.bash", "w") as f:
             for line in lines:
                 f.write(line)
         lines.clear()  # clear
 
+        lines = []
+        with open(self.SCRIPTS_FOLDER + "change_iptables.bash", "r") as f:
+            for line in f.readlines():
+                lines.append(line)
+        lines[1] = 'WIRELESS_CARD="' + self.WIRELESS_CARD + '"\n'
+        with open(self.SCRIPTS_FOLDER + "change_iptables.bash", "w") as f:
+            for line in lines:
+                f.write(line)
+
     def modify_frida_script(self):
         lines = []
         lines.append("#!/bin/bash")
         lines.append('target_app="' + self.APK_NAME + '"\n')
-        lines.append('select_device="' + self.DEVICE_CONFIG_DICT["udid"] + '"\n')
+        lines.append('select_device="' + self.UDID + '"\n')
         lines.append('script_path="' + self.SCRIPTS_FOLDER + 'pinning_disable.js"\n')
         lines.append("frida -D $select_device -F $target_app -l $script_path")
 
@@ -174,56 +184,66 @@ class LearnCls:
         # admin_proc
         admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
 
-        # start tshark
         self.cur_packet_name = pcapng_name + '_' + str(int(time.time())) + ".pcapng"
-        mlog.log_func(mlog.LOG, "Start capturing, save in file: " + self.cur_packet_name)
 
         # create folder
-        if not os.path.exists(self.PACKET_ROOT_PATH):
-            os.mkdir(self.PACKET_ROOT_PATH)
-        self.cur_packet_path = self.PACKET_ROOT_PATH + self.cur_packet_name
+        self.cur_packet_folder = self.PACKET_ROOT_PATH + self.cur_packet_name[:-7] + "/"
+        if not os.path.exists(self.cur_packet_folder):
+            os.makedirs(self.cur_packet_folder)
 
-        with open(self.LOG_FOLDER_PATH + "tshark_log_file.txt", "w") as log_file:
-            a = subprocess.Popen(["sudo", "-S", "tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_path],
-                                 stdin=admin_proc.stdout, stdout=log_file)
+        self.cur_packet_path = self.cur_packet_folder + self.cur_packet_name
+        # self.cur_packet_path = self.PACKET_ROOT_PATH + self.cur_packet_name
 
-        # kill mitm
-        self.kill_mitm()
+        # # kill mitm
+        # self.kill_mitm()
+        #
+        # # change iptable rules
+        # mlog.log_func(mlog.LOG, "Change iptable rules")
+        # command = "sudo -S bash " + self.SCRIPTS_FOLDER + "change_iptables.bash"
+        # change_iptables_proc = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+        #
+        # # start mitm
+        # mlog.log_func(mlog.LOG, "launch mitm")
+        # command = "bash " + self.SCRIPTS_FOLDER + "launch_mitm.bash"
+        # # with open(self.LOG_FOLDER_PATH + "mitm_log.txt", "w") as log:
+        # #     mitm_proc = subprocess.Popen(command.split(), stdout=log)
+        # mitm_proc = subprocess.Popen(["bash", self.SCRIPTS_FOLDER+"launch_mitm.bash"], stdout=subprocess.PIPE)
 
-        # start mitm
-        command = "sudo -S bash " + self.SCRIPTS_FOLDER + "launch_mitm.bash"
-        with open(self.LOG_FOLDER_PATH + "mitm_log.txt", "w") as log:
-            mitm_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout, stdout=log)
+        mlog.log_func(mlog.LOG, "Start capturing, save in file: " + self.PACKET_ROOT_PATH + self.cur_packet_name)
+        # with open(self.LOG_FOLDER_PATH + "tshark_log_file.txt", "w") as log_file:
+            # a = subprocess.Popen(["sudo", "-S", "tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_path], stdin=admin_proc.stdout, stdout=log_file)
+        a = subprocess.Popen(["tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_path], stdout=open(self.LOG_FOLDER_PATH + "tshark_log_file.txt"))
 
         admin_proc.kill()
 
     def stop_tshark(self, with_error=0):
         admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
-        cur_packet_folder = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/"
-        cur_packet_path = self.PACKET_ROOT_PATH + self.cur_packet_name
         # stop tshark and chmod
         self.kill_tshark()
-        stop_proc = subprocess.Popen(["sudo", "-S", "chmod", "777", cur_packet_path],
-                                     stdin=admin_proc.stdout)
 
-        # kill mitm
-        self.kill_mitm()
+        # # kill mitm
+        # self.kill_mitm()
 
-        # chmod sslkeyfile
-        subprocess.check_call(["sudo", "-S", "chmod", "777", self.PACKET_ROOT_PATH + 'sslkeylogfile.txt'],
-                              stdin=admin_proc.stdout)
+        # stop_proc = subprocess.Popen(["sudo", "-S", "chmod", "777", self.cur_packet_path],
+        #                              stdin=admin_proc.stdout)
+        # # chmod sslkeyfile
+        # subprocess.check_call(["sudo", "-S", "chmod", "777", self.PACKET_ROOT_PATH + 'sslkeylogfile.txt'],
+        #                       stdin=admin_proc.stdout)
+
+        # self.chmod()
+
         # rename sslkeyfile
-        os.rename(self.PACKET_ROOT_PATH + 'sslkeylogfile.txt', self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt")
+        os.rename(self.PACKET_ROOT_PATH + 'sslkeylogfile.txt',
+                  self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt")
 
-        if not os.path.exists(cur_packet_folder):
-            os.makedirs(cur_packet_folder)
-        # move file to it's folder
-        shutil.move(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt", cur_packet_folder)
-        shutil.move(cur_packet_path, cur_packet_folder)
+        # move file to it's corresponding folder
+        shutil.move(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt", self.cur_packet_folder)
 
         admin_proc.kill()
 
     def kill_mitm(self):
+        mlog.log_func(mlog.LOG, "kill mitm and clear iptable rules")
+
         admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
         # get process id
         file_name = self.SCRIPTS_FOLDER + "1.txt"
@@ -249,6 +269,8 @@ class LearnCls:
         admin_proc.kill()
 
     def kill_tshark(self):
+        mlog.log_func(mlog.LOG, "kill tshark")
+
         fine_name = self.SCRIPTS_FOLDER + "temp_tshark_ps"
         command = "ps -aux|grep tshark > " + fine_name
         os.system(command)
@@ -264,9 +286,10 @@ class LearnCls:
         os.remove(fine_name)
 
     def start_frida_hook(self):
+        mlog.log_func(mlog.LOG, "Start frida to ban the SSL Pinning")
         # start disable ssl pinning
         command = "bash " + self.SCRIPTS_FOLDER + "start_pinning_frida_script.bash"
-        sslpin_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+        sslpin_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stdin=open("/dev/null"))
 
     def stop_frida_hook(self):
         fine_name = self.SCRIPTS_FOLDER + "temp_tshark_ps"
@@ -284,11 +307,14 @@ class LearnCls:
         os.remove(fine_name)
 
     def start_appium_server(self, path_to_appium):
+        mlog.log_func(mlog.LOG, "Start appium service....")
+
         path = "/".join(path_to_appium.split("/")[:-1]) + ":"
         os.environ['PATH'] = path + os.environ['PATH']
         command = f"{path_to_appium} -a 127.0.0.1 -p {self.APPIUM_PORT} --session-override"
         with open(self.LOG_FOLDER_PATH + "appium_log.txt", "w") as log_file:
-            process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, shell=True, preexec_fn=os.setsid)
+            process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT, shell=True,
+                                       preexec_fn=os.setsid)
         self.appium_process = process
 
     def stop_appium_server(self):
@@ -309,79 +335,9 @@ class LearnCls:
 
         return result
 
-    def create_socket(self):
-        mlog.log_func(mlog.LOG, "Start connecting to server...")
-        self.SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.SOCKET.bind((self.LOCAL_IP, self.LOCAL_PORT))
-        self.SOCKET.connect((self.SERVER_IP, self.SERVER_PORT))
-        mlog.log_func(mlog.LOG, "Connection build")
-
-    def get_input_from_learner(self):
-        if manually_flag:
-            return test_button_list
-        else:
-            # communicate with the server
-            message = self.SOCKET.recv(1024)
-            message_type = message[0]
-            context = message[1:].decode('utf-8')
-            if message_type == 1:
-                print("[LOG] Receive input: " + context)
-                '''
-                '''
-                # Add the response to Reset, which needs to be deleted later
-                if context == "Reset":
-                    self.SOCKET.sendall(bytes([message_type]) + "Reset has received".encode('utf-8'))
-                '''
-                '''
-            else:
-                print("[ERROR] Don't receive input message")
-            return context
-
-    def parse_packet_and_get_response(self, packet_name) -> str:
-        return packet_parser.get_new_op_class_for_response(packet_name)
-
-    def response_to_learner(self, output):
-        """
-        Tell the learner the output of operation.
-        :param output: result str from packet parsing
-        """
-        reply_message = bytes([1]) + output.encode('utf-8')
-        self.SOCKET.sendall(reply_message)
-
-    def dfs_search(self, act1, act2):
-        """
-        使用dfs算法看是否在Activity中存在从act1切换到act2的路径
-        """
-
-        def search_graph(graph, start, end):
-            results = []
-            generate_path(graph, [start], end, results)
-            results.sort(key=lambda x: len(x))
-            return results
-
-        def generate_path(graph, path, end, results):
-            state = path[-1]
-            if state == end:
-                results.append(path)
-            else:
-                for arc in graph[state]:
-                    if arc not in path:
-                        generate_path(graph, path + [arc], end, results)
-
-        act_tg_dict = self.get_tg_dict()
-
-        if act1 in act_tg_dict.keys():
-            for nodes in act_tg_dict.keys():
-                act_tg_dict[nodes] = list(act_tg_dict[nodes].keys())
-
-            r = search_graph(act_tg_dict, act1, act2)
-
-            if not r:
-                return None
-            else:
-                return r
-        else:
-            return None
+    def parse_packet_and_get_response(self, database, packet_name, op_name, start_time, end_time) -> str:
+        return packet_parser.get_new_op_class_for_response(database, packet_name, self.cur_key_log_file_path, op_name,
+                                                           start_time, end_time)
 
     def start_driver(self):
         """
@@ -389,43 +345,55 @@ class LearnCls:
         :return: device driver for auto click
         """
         mlog.log_func(mlog.LOG, "Get device config:")
-        mlog.log_dict_func(mlog.LOG, self.DEVICE_CONFIG_DICT)
+        mlog.log_dict_func(mlog.LOG, self.DEVICE_CONFIG_DICT_FOR_APPIUM)
 
-        driver = webdriver.Remote(self.APPIUM_IP, self.DEVICE_CONFIG_DICT)
+        driver = webdriver.Remote(self.APPIUM_IP, self.DEVICE_CONFIG_DICT_FOR_APPIUM)
 
         self.driver = driver
 
+    def start_driver_and_init(self):
+        self.start_driver()
+        self.back_to_home()
+
     def stop_driver(self):
+        mlog.log_func(mlog.LOG, "Stop driver")
         self.driver.quit()
         self.stop_appium_server()
 
-    def back_to_home(self, val_but_dict):
+    def stop_learn(self):
+        mlog.log_func(mlog.LOG, "Stop capture.")
+        # stop packet capture, close android driver
+        self.stop_tshark()
+        self.stop_frida_hook()
+
+    def back_to_home(self):
         mlog.log_func(mlog.LOG, "Back to homepage")
-        command = f"adb shell am start -n {self.APK_NAME}/{self.APP_ACTIVITY}"
+        command = f"adb -s {self.UDID} shell am start -n {self.APK_NAME}/{self.APP_ACTIVITY}"
         while self.APK_NAME + self.driver.current_activity != self.HOME_PAGE_ACT:
             os.system(command)
             time.sleep(0.5)
 
         # back to home page
-        while not self.click_button("BackHome", val_but_dict):
+        while not self.click_button("BackHome"):
             mlog.log_func(mlog.LOG, "Press back-system")
             self.driver.back()
             time.sleep(0.5)
 
-    def click_and_save(self, ui_name, uip_dict, waiting_time=8):
+    def click_and_save(self, ui_name, waiting_time=3):
         """
         Click the button
         :param ui_name: action name
-        :param uip_dict: click path dictionary of button
         :param waiting_time:
         :return:
         """
-        mlog.log_func(mlog.LOG, "Click task-----" + ui_name)
+        mlog.log_func(mlog.LOG, f"<{self.USER}> Click task-----{ui_name}")
         start_time = time.time()
-        if self.click_button(ui_name, uip_dict):
+        if self.click_button(ui_name):
             time.sleep(waiting_time)
             end_time = time.time()
-            action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
+            # save log
+            action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[
+                0] + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
             if not os.path.exists(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + ui_name + "/"):
                 os.makedirs(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + ui_name + "/")
             with open(action_log_file, "w") as log:
@@ -434,28 +402,27 @@ class LearnCls:
                 log.write(str(start_time))
                 log.write('\n')
                 log.write(str(end_time))
-            get_ips.get_and_save_ip_list_by_apk(self.APK_NAME)
-            return True
+            get_ips.get_and_save_ip_list_by_apk(self.APK_NAME, self.UDID)
+            return [start_time, end_time]
         return False
 
-    def click_button(self, ui_name, uip_dict):
+    def click_button(self, ui_name):
         """
         Click the button
         :param ui_name: action name will be clicked
-        :param uip_dict: click path dictionary of button
         """
         is_special_op = False
-        if ui_name in uip_dict["Special"]:
+        if ui_name in self.val_but_dict["Special"]:
             is_special_op = True
-        elif ui_name not in uip_dict.keys():
+        elif ui_name not in self.val_but_dict.keys():
             mlog.log_func(mlog.ERROR, f"UI <{ui_name}> which will be clicked is not in config/valuable_button.json")
             return False
 
         # get click path
         if not is_special_op:
-            click_path_dict = uip_dict[ui_name]
+            click_path_dict = self.val_but_dict[ui_name]
         else:
-            click_path_dict = uip_dict["Special"][ui_name]
+            click_path_dict = self.val_but_dict["Special"][ui_name]
 
         # click one by one
         for index in click_path_dict.keys():
@@ -471,8 +438,6 @@ class LearnCls:
             # get location and click
             if "xpath" in click_path_dict[index].keys():
                 cur_ui_xpath = click_path_dict[index]["xpath"]
-                act_before = click_path_dict[index]["act_before"]
-                act_after = click_path_dict[index]["act_after"]
 
                 # if exist
                 try:
@@ -495,7 +460,8 @@ class LearnCls:
                         except exceptions.NoSuchElementException:
                             pass
                     if not if_find_flag:
-                        mlog.log_func(mlog.LOG, "can not find component when --- " + click_path_dict[index]["description"])
+                        mlog.log_func(mlog.LOG,
+                                      "can not find component when --- " + click_path_dict[index]["description"])
                         return False
 
             # find element by resource id
@@ -525,7 +491,8 @@ class LearnCls:
                         except exceptions.NoSuchElementException:
                             pass
                     if not if_find_flag:
-                        mlog.log_func(mlog.LOG, "can not find component when --- " + click_path_dict[index]["description"])
+                        mlog.log_func(mlog.LOG,
+                                      "can not find component when --- " + click_path_dict[index]["description"])
                         return False
             elif "posi_x" in click_path_dict[index].keys() and "posi_y" in click_path_dict[index].keys():
                 self.driver.tap([(click_path_dict[index]["posi_x"], click_path_dict[index]["posi_y"])])
@@ -536,14 +503,15 @@ class LearnCls:
 
         return True
 
-    def randomly_create_database(self, valuable_button_list, uip_dict, mean_size=8):
+    def randomly_create_database(self, valuable_button_list, mean_size=8):
         def check_if_enough():
             total_count = 0
             count_dict = defaultdict(int)
             for op_name in valuable_button_list:
                 if op_name in os.listdir(self.cur_packet_path):
                     op_folder = self.cur_packet_path + op_name + "/"
-                    count_dict[op_name] += len([x for x in os.listdir(op_folder) if op_name in x and x.split(".")[-1] == "txt"])
+                    count_dict[op_name] += len(
+                        [x for x in os.listdir(op_folder) if op_name in x and x.split(".")[-1] == "txt"])
                     total_count += count_dict[op_name]
                 else:
                     count_dict[op_name] += 0
@@ -554,146 +522,398 @@ class LearnCls:
         # round 1
         ori_click_order = generate_random_click_order_with_count(valuable_button_list)
         for op in ori_click_order:
-            self.back_to_home(uip_dict)
-            self.click_and_save(op, uip_dict)
+            self.back_to_home()
+            self.click_and_save(op)
 
         while not check_if_enough():
             ori_click_order = generate_random_click_order_with_count(valuable_button_list)
             for op in ori_click_order:
-                self.back_to_home(uip_dict)
-                self.click_and_save(op, uip_dict)
+                self.back_to_home()
+                self.click_and_save(op)
 
-    def customized_create_database(self, custom_list, uip_dict):
-        for op in custom_list:
-            self.back_to_home(uip_dict)
-            self.click_and_save(op, uip_dict)
 
-    def load_alphabet(self, ui_list):
+class LearnCls:
+    def __init__(self):
+        # paths
+        self.ROOT_PATH = os.path.dirname(__file__)
+        self.CONF_FOLDER_PATH = self.ROOT_PATH + "/../config/"
+        self.LEARNLIB_FOLDER = self.ROOT_PATH + "/learnlib_module/"
+        self.VALUABLE_BUTTON_FILE = self.CONF_FOLDER_PATH + "valuable_button.json"
+
+        # communication information
+        self.LOCAL_IP = ""
+        self.LOCAL_PORT = 7011
+        self.SERVER_IP = "127.0.0.1"
+        self.SERVER_PORT = 9999
+        self.SOCKET = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.SYSTEM_MESSAGE = 0
+        self.LEARNLIB_MESSAGE = 1
+        self.QUERY_MESSAGE = 2
+
+    def load_alphabet(self, overlook_button_list: list):
         """
         Send a reply to learner to tell the scan results.
-        :param ui_list: valuable UI list
-        :param server_socket: server socket to send message
+        :param overlook_button_list: ["user1|AS"]
         :return: response from Learner
         """
         # print log
         mlog.log_func(mlog.LOG, "send input_bat to learner...")
-        print("input_bat: ", ui_list)
+
+        # load valuable button dictionary
+        with open(self.VALUABLE_BUTTON_FILE, "r") as val_but_file:
+            but_dict = json.load(val_but_file)
+
+        # load ui_list
+        ui_list = []
+        for user, button_dict in but_dict.items():
+            button_name_list = list(button_dict.keys())
+            for item in button_name_list:
+                if item != "Special" and (user + "|" + item) not in overlook_button_list:
+                    ui_list.append(user + "|" + item)
+
+        mlog.log_list_func(mlog.LOG, ui_list)
 
         # communicate with the server
         message = self.SOCKET.recv(1024)
         message_type = message[0]
         context = message[1:].decode('utf-8')
-        if message_type == 0 and context == "alphabet":
+        if message_type == self.SYSTEM_MESSAGE and context == "alphabet":
             mlog.log_func(mlog.LOG, "Receive alphabet send request")
+
+            # create file for alphabet
+            alphabet_file = self.LEARNLIB_FOLDER + "src/main/resources/input_bat"
+            with open(alphabet_file, "w") as f:
+                for item in ui_list:
+                    if item != ui_list[-1]:
+                        f.write(item + "\n")
+                    else:
+                        f.write(item)
+            mlog.log_func(mlog.LOG, "Create the alphabet file input_bat")
 
             # Send reply message
             reply_context = "Succeed!"
-            reply_message = bytes([message_type]) + reply_context.encode('utf-8')
+            reply_message = bytes([self.SYSTEM_MESSAGE]) + reply_context.encode('utf-8')
             self.SOCKET.sendall(reply_message)
-            mlog.log_func(mlog.LOG, "Send reply message")
+            mlog.log_func(mlog.LOG, "Send alphabet success")
         else:
             mlog.log_func(mlog.ERROR, "Don't receive alphabet send request")
 
-        # create file for alphabet
-        alphabet_file = self.LEARNLIB_FOLDER + "src/main/resources/input_bat"
-        with open(alphabet_file, "w") as f:
-            for item in ui_list:
-                if item != ui_list[-1]:
-                    f.write(item + "\n")
+    def create_socket(self):
+        mlog.log_func(mlog.LOG, "Start connecting to server...")
+        self.SOCKET.bind((self.LOCAL_IP, self.LOCAL_PORT))
+        self.SOCKET.connect((self.SERVER_IP, self.SERVER_PORT))
+        mlog.log_func(mlog.LOG, "Connection build")
+
+    def close_socket(self):
+        mlog.log_func(mlog.LOG, "Close the socket...")
+        self.SOCKET.close()
+
+    def response_to_learner(self, output):
+        """
+        Tell the learner the output of operation.
+        :param output: result str from packet parsing
+        """
+        reply_message = bytes([1]) + output.encode('utf-8')
+        mlog.log_func(mlog.LOG, "Send reply message: " + output)
+        self.SOCKET.sendall(reply_message)
+
+    def get_input_from_learner(self):
+        # communicate with the server
+        message = self.SOCKET.recv(1024)
+        if message:
+            message_type = message[0]
+            context = message[1:].decode('utf-8')
+            if message_type == self.SYSTEM_MESSAGE:
+                mlog.log_func(mlog.LOG, "Receive system message: " + context)
+                return context
+            elif message_type == self.LEARNLIB_MESSAGE:
+                mlog.log_func(mlog.LOG, "Receive learnlib message: " + context)
+                return context
+            elif message_type == self.QUERY_MESSAGE:
+                mlog.log_func(mlog.LOG, "Receive query message: " + context)
+                return context
+            else:
+                mlog.log_func(mlog.ERROR, "Don't receive input message")
+
+            return context
+        else:
+            return "closeConnect"
+
+
+def read_log_and_gen_response_list(log_file_path):
+    if not os.path.exists(log_file_path):
+        return None
+
+    return_list = []
+
+    # read file
+    with open(log_file_path, "r") as log_file_handle:
+        lines = log_file_handle.readlines()
+
+        last_reset_index = -1
+        req_resp_tuple = ["", ""]
+        for line in lines:
+            if "Receive learnlib message" in line:
+                req_resp_tuple[0] = line.split()[-1].replace("\n", "")
+                if req_resp_tuple[0] == "Reset":
+                    last_reset_index = len(return_list)
+            elif "Receive query message" in line:
+                req_resp_tuple[0] = line.split()[-1].replace("\n", "")
+            elif "Send reply message" in line:
+                req_resp_tuple[1] = line.split()[-1].replace("\n", "")
+                if req_resp_tuple[0] != "":
+                    return_list.append(req_resp_tuple)
                 else:
-                    f.write(item)
-        mlog.log_func(mlog.LOG, "Create the alphabet file input_bat")
+                    mlog.log_func(mlog.ERROR, "Extracting log failed, please check operation order")
+                    mlog.log_func(mlog.ERROR, "Start learning without help from log...")
+                    return None
+                req_resp_tuple = ["", ""]
+            else:
+                continue
 
-        self.get_input_from_learner()
-        self.response_to_learner(self.get_input_from_learner() + "_suc")
+    return return_list[:last_reset_index]
+
+# def auto_learn_to_create_dataset(scan_result_name):
+#     # create an entity of learn
+#     learn_entity = DeviceCls(scan_result_name, "nexus")
+#     # get val_buttons
+#     val_but_dict = get_valuable_button(learn_entity.VALUABLE_BUTTON_FILE)
+#     val_but_list = list(val_but_dict.keys())
+#     val_but_list.remove("Special")
+#     val_but_list.remove("add_scene")
+#
+#     # start app and get driver
+#     learn_entity.start_driver()
+#
+#     learn_entity.start_tshark("random_click_dataset")
+#
+#     # click and capture
+#     learn_entity.randomly_create_database(val_but_list, val_but_dict)
+#
+#     mlog.log_func(mlog.LOG, "Stop capture.")
+#     # stop packet capture, close android driver
+#     learn_entity.stop_tshark()
+#     learn_entity.stop_frida_hook()
+#     learn_entity.stop_driver()
 
 
-def auto_learn_to_create_dataset(scan_result_name):
-    # create an entity of learn
-    learn_entity = LearnCls(scan_result_name, "nexus")
-    # get val_buttons
-    val_but_dict = get_valuable_button(learn_entity.VALUABLE_BUTTON_FILE)
-    val_but_list = list(val_but_dict.keys())
-    val_but_list.remove("Special")
-    val_but_list.remove("add_scene")
-
-    # start app and get driver
-    learn_entity.start_driver()
-
-    learn_entity.start_tshark("random_click_dataset")
-
-    # click and capture
-    learn_entity.randomly_create_database(val_but_list, val_but_dict)
-
-    mlog.log_func(mlog.LOG, "Stop capture.")
-    # stop packet capture, close android driver
-    learn_entity.stop_tshark()
-    learn_entity.stop_frida_hook()
-    learn_entity.stop_driver()
-
-
-def manual_learn_to_create_dataset(scan_result_name):
+def manual_learn_to_create_dataset(scan_result_name, database):
     mlog.log_func(mlog.LOG, "Manual test start")
 
-    # create an entity of learn
-    # learn_entity = LearnCls(scan_result_name, "nexus")
-    learn_entity = LearnCls(scan_result_name, "pixel7")
-    # get val_buttons
-    val_but_dict = get_valuable_button(learn_entity.VALUABLE_BUTTON_FILE)
-    val_but_list = list(val_but_dict.keys())
-    val_but_list.remove("Special")
-    val_but_list.remove("add_scene")
+    # create an entity of learn and start driver
+    pixel_entity = DeviceCls(scan_result_name, "pixel7", "user1", frida_flag=True)
+    pixel_entity.start_driver_and_init()
+    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", frida_flag=False)
+    nexus_entity.start_driver_and_init()
 
-    # start app and get driver
-    learn_entity.start_driver()
-    learn_entity.start_tshark("manual_dataset")
+    # start tshark
+    pixel_entity.start_tshark("manual_dataset")
 
-    test_order_list = ["ADU1CWRD88:97:46:2C:9A:CE", "DCU1", "RDU1CWRD88:97:46:2C:9A:CE", "ADU1CWRD88:97:46:2C:9A:CE", "SAU1CWRU2", "DCU1", "DCU1", "RDU1CWRD88:97:46:2C:9A:CE", "USU1CWRU2"]
+    test_order_list = ["SAU1CWRU2", "DCU1", "USU1CWRU2", "ADU1CWR", "DCU1", "SAU1CWRU2", "DCU1", "USU1CWRU2", "RDU1CWR",
+                       "ADU1CWR", "RDU1CWR"]
+    # test_order_list = ["SAU1CWRU2"]
+    mlog.log_func(mlog.LOG, "test order")
     mlog.log_list_func(mlog.LOG, test_order_list)
 
     for count in range(2):
         for cur_op_name in test_order_list:
-            print("Current operation: ", cur_op_name)
+            pixel_entity.back_to_home()
+            time_list = pixel_entity.click_and_save(cur_op_name, waiting_time=3)
+
+            if time_list:
+                mlog.log_func(mlog.LOG, pixel_entity.parse_packet_and_get_response(database, pixel_entity.cur_packet_name,
+                                                       cur_op_name, time_list[0], time_list[1]))
+            else:
+                # can not tap
+                mlog.log_func(mlog.ERROR, f"Option: {cur_op_name} can't tap")
+                mlog.log_func(mlog.LOG, "NoElement")
+
             if cur_op_name == "SAU1CWRU2":
-                print("\tSA, press agree/deny manually")
-            learn_entity.back_to_home(val_but_dict)
-            learn_entity.click_and_save(cur_op_name, val_but_dict)
-            get_ips.get_and_save_ip_list_by_apk(learn_entity.APK_NAME)
+                mlog.log_func(mlog.DEBUG, "Current operation is <SA>, waiting for user2 agree")
+                nexus_entity.back_to_home()
+                nexus_entity.click_button("AcceptInvite")
 
+    # back to homepage
+    pixel_entity.back_to_home()
+    nexus_entity.back_to_home()
 
-    # click and capture
-    # print("Input number to select input('q' to quit): ")
-    # for i in range(len(val_but_list)):
-    #     print("\t", i, val_but_list[i])
-    # input_select = input("Enter current operation: ")
-    # print("current input: ", input_select)
-    # while input_select.lower() != "q":
-    #     print("current input: ", input_select)
-    #     if len(input_select) > 1 or len(input_select) == 0:
-    #         print("[ERROR]\tPlease check and re-input('q' to quit)\t[ERROR]")
-    #     elif int(input_select) < len(val_but_list):
-    #         cur_op_name = val_but_list[int(input_select)]
-    #         learn_entity.back_to_home(val_but_dict)
-    #         learn_entity.click_and_save(cur_op_name, val_but_dict)
-    #     else:
-    #         print("[ERROR]\tPlease check and re-input('q' to quit)\t[ERROR]")
-    #
-    #     for i in range(len(val_but_list)):
-    #         print("\t", i, val_but_list[i])
-    #     input_select = input("Enter current operation: ")
-
-    mlog.log_func(mlog.LOG, "Stop capture.")
-    learn_entity.back_to_home(val_but_dict)
     # stop packet capture, close android driver
-    learn_entity.stop_tshark()
-    learn_entity.stop_frida_hook()
-    learn_entity.stop_driver()
+    pixel_entity.stop_learn()
+
+    # stop driver
+    pixel_entity.stop_driver()
+    nexus_entity.stop_driver()
+
+
+def learn_model_main(scan_result_name, database, learn_dir_name="learnlib_learn", use_log_file_to_reponse=False, log_file_path=""):
+    """
+    main function: use scan_result_name from databse to get request from learnlib and response
+    :param scan_result_name:
+    :param dataset:
+    :param device:
+    """
+    mlog.log_func(mlog.LOG, "Learn model start")
+
+    # create an entity for learning
+    learn_entity = LearnCls()
+    # create sockets to connect to learners for communication
+    learn_entity.create_socket()
+    # pass the alphabet to the learner
+    overlook_list = ["user1|AS", "user1|SDU1CWR", "user1|VD1S", #"user1|ADU1CWR", "user1|RDU1CWR", "user1|DCU1",
+                     "user2|AcceptDeviceShare", "user2|RejectDeviceShare", "user2|AcceptInvite", "user2|DenyInvite"]
+    learn_entity.load_alphabet(overlook_list)
+
+    # create device entity for click
+    pixel7_entity = DeviceCls(scan_result_name, "pixel7", "user1", frida_flag=True)
+    pixel7_entity.start_driver_and_init()
+    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", frida_flag=False)
+    nexus_entity.start_driver_and_init()
+
+    # for index
+    user_device_entity_dict = {
+        "user1": pixel7_entity,
+        "user2": nexus_entity
+    }
+
+    # # start tshark
+    pixel7_entity.start_tshark(learn_dir_name)
+    time.sleep(5)
+
+    if use_log_file_to_reponse:
+        operation_result_list = read_log_and_gen_response_list(log_file_path)
+        while operation_result_list:
+            cur_op_result = operation_result_list.pop(0)
+            option = learn_entity.get_input_from_learner()
+            if option == cur_op_result[0]:
+                learn_entity.response_to_learner(cur_op_result[1])
+            else:
+                """
+                    need modify---modify log to the last correct reset operation and restart
+                """
+                mlog.log_func(mlog.ERROR,
+                              f"Op from log: <{cur_op_result[0]}>, but receive: <{option}>\n\tPlease check log or not use log file")
+                # stop packet capture, close android driver
+                # pixel7_entity.stop_learn()
+                #
+                # # stop driver
+                # pixel7_entity.stop_driver()
+                # nexus_entity.stop_driver()
+                learn_entity.close_socket()
+                exit(-4)
+
+    # get constrain dictionary
+    mlog.log_func(mlog.LOG, "Get constrain rules")
+    mlog.log_dict_func(mlog.LOG, button_constrain.constrain_dict)
+    mlog.log_dict_func(mlog.LOG, button_constrain.conflict_dic)
+
+    # A stack, store current cache
+    run_cache = []
+
+    # learning
+    while True:
+        option = learn_entity.get_input_from_learner()
+
+        if option == "closeConnect":
+            mlog.log_func(mlog.LOG, "Stop learning...")
+            learn_entity.response_to_learner("close the client")
+            learn_entity.close_socket()
+            break
+
+        if option == "checkCounterExample":
+            mlog.log_func(mlog.LOG, "Check the counter example...")
+            learn_entity.response_to_learner("WaitForChecking")
+            continue
+
+        if option == "Reset":
+            mlog.log_func(mlog.LOG, "Reset--USU1CWRU2")
+            user_device_entity_dict["user1"].back_to_home()
+            user_device_entity_dict["user1"].click_button("USU1CWRU2")
+            mlog.log_func(mlog.LOG, "Reset--VD1S")
+            user_device_entity_dict["user1"].back_to_home()
+            user_device_entity_dict["user1"].click_button("VD1S")
+            mlog.log_func(mlog.LOG, "Reset--RDU1CWR")
+            user_device_entity_dict["user1"].back_to_home()
+            user_device_entity_dict["user1"].click_button("RDU1CWR")
+
+            mlog.log_func(mlog.LOG, "Reset--DenyInvite")
+            user_device_entity_dict["user2"].back_to_home()
+            user_device_entity_dict["user2"].click_button("DenyInvite")
+
+            # clear cache
+            run_cache.clear()
+            """
+            how to check?
+            """
+
+            learn_entity.response_to_learner("Reset_suc")
+            continue
+
+        # check if current option is in constrain list
+        if option in button_constrain.constrain_dict and button_constrain.constrain_dict[option] not in run_cache:
+            # can not tap
+            mlog.log_func(mlog.LOG, f"Option: {option} can't tap --- by cache")
+            mlog.log_func(mlog.LOG, f"Current cache: ")
+            mlog.log_list_func(mlog.LOG, run_cache)
+            learn_entity.response_to_learner("NoElement")
+            continue
+
+        if option in button_constrain.conflict_dic and button_constrain.conflict_dic[option] in run_cache:
+            run_cache.remove(button_constrain.conflict_dic[option])
+
+        if option in button_constrain.conflict_dic.values() and option not in run_cache:
+            run_cache.append(option)
+
+        print("run_cache: ", run_cache)
+
+        user = option.split("|")[0]
+        option = option.split("|")[-1]
+
+        user_device_entity_dict[user].back_to_home()
+        time_list = user_device_entity_dict[user].click_and_save(option, waiting_time=3)
+
+        if time_list:
+            class_result = user_device_entity_dict[user].parse_packet_and_get_response(database,
+                                                                                       user_device_entity_dict[
+                                                                                           user].cur_packet_name,
+                                                                                       option, time_list[0],
+                                                                                       time_list[1])
+            # mlog.log_func(mlog.LOG, class_result)
+            if class_result:
+                learn_entity.response_to_learner(class_result)
+            else:
+                break
+
+            if option == "SAU1CWRU2":
+                mlog.log_func(mlog.DEBUG, "Current operation is <SA>, waiting for user2 agree")
+                user_device_entity_dict["user2"].back_to_home()
+                user_device_entity_dict["user2"].click_button("AcceptInvite")
+        else:
+            # can not tap
+            mlog.log_func(mlog.LOG, f"Option: {option} can't tap")
+
+            # check if device is offline
+            if option == "ADU1CWR" and "user1|ADU1CWR" not in run_cache:
+                # device offline
+                mlog.log_func(mlog.ERROR, "Device Offline, please check")
+            learn_entity.response_to_learner("NoElement")
+            break
+
+    # learn stop, back to home
+    pixel7_entity.back_to_home()
+    nexus_entity.back_to_home()
+
+    # stop packet capture, close android driver
+    pixel7_entity.stop_learn()
+
+    # stop driver
+    pixel7_entity.stop_driver()
+    nexus_entity.stop_driver()
 
 
 if __name__ == "__main__":
     mlog.clear_log()
-    if not check_if_frida_server_is_start():
-        print("[frida server] is not start")
-        exit(10)
-    # auto_learn_to_create_dataset("20230920183445_com.huawei.smarthome")
-    manual_learn_to_create_dataset("20230920183445_com.huawei.smarthome")
+    # if not check_if_frida_server_is_start():
+    #     print("[frida server] is not start")
+    #     exit(10)
+    # manual_learn_to_create_dataset("20230920183445_com.huawei.smarthome", "manual_dataset_1709359674")
+    learn_model_main("20230920183445_com.huawei.smarthome", "manual_dataset_1709359674", use_log_file_to_reponse=False, log_file_path=os.path.dirname(__file__) + "/../log/program_save.log")

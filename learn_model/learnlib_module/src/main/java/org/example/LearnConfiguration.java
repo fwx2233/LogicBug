@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Objects;
 import java.util.Properties;
 
 public class LearnConfiguration {
@@ -15,6 +16,7 @@ public class LearnConfiguration {
     int port = 9999;
     String outputDir = "result";
     String alphabetFile = "src/main/resources/input_bat";
+    boolean useCache = false;
     AlphabetManager aM;
 
     // Build Properties object to read configuration information
@@ -63,6 +65,15 @@ public class LearnConfiguration {
         else
             LogManager.logger.logEvent("Null alphabet file");
         LogManager.logger.logEvent("The alphabet file: " + alphabetFile);
+
+        // Check whether using cache
+        if(Objects.equals(properties.getProperty("useCache"), "yes"))
+            useCache = true;
+        else {
+            useCache = false;
+            LogManager.logger.logEvent("Null useCache");
+        }
+        LogManager.logger.logEvent("The useCache: " + useCache);
 
         // TODO 完善其他配置参数的载入
 

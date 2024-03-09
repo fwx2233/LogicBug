@@ -1,6 +1,8 @@
 package org.example;
 
 import java.io.IOException;
+import java.util.Objects;
+import java.util.Scanner;
 
 // Main function
 public class Main {
@@ -15,10 +17,13 @@ public class Main {
         // Building Sockets for Communication
         NetworkManager network = new NetworkManager(conf);
 
+        // Set cache query
+        CacheManager cache = new CacheManager();
+
         // Get Alphabet
         if (conf.setAlphabet()) {
             // Build a learner
-            Learner learner= new Learner(conf, network);
+            Learner learner= new Learner(conf, network, cache);
             // learn state machine
             learner.learn();
         }

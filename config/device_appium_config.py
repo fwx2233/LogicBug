@@ -10,6 +10,7 @@ device_configs = {
         "udid": "5VT7N15A29000275",
         "noReset": True,
         "dontStopAppOnReset": True,
+        'newCommandTimeout': "600",
         "additionalMess": {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
             "wirelessCard": "wlxc01c30151c62",
@@ -27,6 +28,7 @@ device_configs = {
         "udid": "2A111FDH200CJ3",
         "noReset": True,
         "dontStopAppOnReset": True,
+        'newCommandTimeout': "600",
         "additionalMess": {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
             "wirelessCard": "wlxc01c30151c62",

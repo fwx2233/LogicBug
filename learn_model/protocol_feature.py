@@ -3,6 +3,5 @@ feature_dict = {
     "common": ["src", "srcport", "dst", "domain", "dstport", "protocol"],
     "http": ["request_method", "host", "request_uri"],
     "mqtt": ["hdrflags", "topic"],
-    # "udp": ["request_length", "response_length"],
     "udp": ["length"],
 }

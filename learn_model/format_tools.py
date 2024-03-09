@@ -91,49 +91,6 @@ def simply_format_header_feature(header_str: str):
 
 
 # continue
-def read_all_uri_and_get_pattern(csv_file_list: list):
-    """
-    Get all kinds uri from csv files, and calculate entropy to get uri pattern
-    :param csv_file_list: csv files under reading
-    :return: uri pattern list
-    """
-    uri_split_str_list_dict = {}
-    topic_split_str_list_dict = {}
-    for csv_file_name in csv_file_list:
-        op_name = csv_file_name.split('_')[0]
-        cur_folder_path = os.path.dirname(__file__) + "/packets/" + op_name + '/'
-        with open(cur_folder_path + csv_file_name, "r") as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            protocol_index = header.index("protocol")
-            uri_index = header.index("request_uri")
-            topic_index = header.index("topic")
-            for line in list(reader)[1:]:
-                if line[protocol_index] == "http":
-                    if str(len(line[uri_index].split('/'))) not in uri_split_str_list_dict:
-                        uri_split_str_list_dict[str(len(line[uri_index].split('/')))] = {str(len(line[uri_index])): [line[uri_index]]}
-                    else:
-                        if str(len(line[uri_index])) not in uri_split_str_list_dict[str(len(line[uri_index].split('/')))]:
-                            uri_split_str_list_dict[str(len(line[uri_index].split('/')))][str(len(line[uri_index]))] = [line[uri_index]]
-                        else:
-                            if line[uri_index] not in uri_split_str_list_dict[str(len(line[uri_index].split('/')))][str(len(line[uri_index]))]:
-                                uri_split_str_list_dict[str(len(line[uri_index].split('/')))][str(len(line[uri_index]))].append(line[uri_index])
-                elif line[protocol_index] == "mqtt" and line[topic_index]:
-                    if str(len(line[topic_index].split('/'))) not in topic_split_str_list_dict:
-                        topic_split_str_list_dict[str(len(line[topic_index].split('/')))] = {str(len(line[topic_index])): [line[topic_index]]}
-                    else:
-                        if str(len(line[topic_index])) not in topic_split_str_list_dict[str(len(line[topic_index].split('/')))]:
-                            topic_split_str_list_dict[str(len(line[topic_index].split('/')))][str(len(line[topic_index]))] = [line[topic_index]]
-                        else:
-                            if line[topic_index] not in topic_split_str_list_dict[str(len(line[topic_index].split('/')))][str(len(line[topic_index]))]:
-                                topic_split_str_list_dict[str(len(line[topic_index].split('/')))][str(len(line[topic_index]))].append(line[topic_index])
-                else:
-                    pass
-    print(uri_split_str_list_dict)
-    print(topic_split_str_list_dict)
-    return 0
-
-
 """
 sort tools
 """
@@ -145,6 +102,11 @@ def sort_dict_by_key(dictionary):
 def sort_dict_by_value(dictionary):
     sorted_dict = dict(sorted(dictionary.items(), key=lambda x: x[1]))
     return sorted_dict
+
+
+"""
+wireshark tools
+"""
 
 
 def transform_timestamp_to_datatime(timestamp, offset=8) -> str:
@@ -178,6 +140,30 @@ def get_wireshark_filter_by_timestamp(start_timestamp, end_timestamp):
     return wireshark_filter
 
 
+def get_wireshark_filter_expression_by_blackname_list_dict(blackname_dict):
+    """
+
+    """
+    domain_filter_condition = []
+    for domains in blackname_dict["domain"]:
+        domain_filter_condition.append('!(ip.host == "' + domains + '")')
+    domain_filter_condition = " and ".join(domain_filter_condition)
+
+    ip_filter_condition = []
+    for ip in blackname_dict["ip"]:
+        ip_filter_condition.append('!(ip.addr == ' + ip + ')')
+    ip_filter_condition = " and ".join(ip_filter_condition)
+
+    result_condition = []
+    if domain_filter_condition:
+        result_condition.append(domain_filter_condition)
+    if ip_filter_condition:
+        result_condition.append(ip_filter_condition)
+    result_condition = " and ".join(result_condition)
+    result_condition = "(" + result_condition + ")"
+    return result_condition
+
+
 def get_domain_by_ip(ip, domain_mapping_list):
     """
     Mapping ip to domain. First, check if there is a domain name cache in DNS. If not, use socket to obtain the host. If both are unavailable, return the IP.
@@ -185,121 +171,70 @@ def get_domain_by_ip(ip, domain_mapping_list):
     :param domain_mapping_list: DNS mapping
     :return: domain or ip
     """
-    for mapping_item in domain_mapping_list:
-        if ip in mapping_item:
-            return mapping_item[ip]
-    try:
-        target_domain = socket.gethostbyaddr(ip)[0]
-        return "compute." + target_domain.split("compute.")[-1]
-    except socket.herror:
+    if type(domain_mapping_list) == list:
+        for mapping_item in domain_mapping_list:
+            if ip in mapping_item:
+                return mapping_item[ip]
         return ip
+    if type(domain_mapping_list) == dict:
+        if ip in domain_mapping_list:
+            return domain_mapping_list[ip]
+        return ip
+    mlog.log_func(mlog.ERROR, "dns mapping type error(not list and not dict)")
+    exit(-3)
+    # try:
+    #     target_domain = socket.gethostbyaddr(ip)[0]
+    #     return "compute." + target_domain.split("compute.")[-1]
+    # except socket.herror:
+    #     return ip
 
 
 """
 Template extraction based on randomness assessment
 """
-def get_separators_and_values(same_len_input_list):
-    """
-
-    """
-    # transform to string
-    str_input_list = [str(x) for x in same_len_input_list]
-
-    # check len
-    check_len = len(str_input_list[0])
-    for x in str_input_list:
-        if len(x) != check_len:
-            mlog.log_func(mlog.ERROR, "Please check your input: ensure that all content in the input is of the same length")
-            mlog.log_list_func(mlog.ERROR, str_input_list)
-            exit(111)
-
-    # get separator list and value index information
-    value_fp_index_list = []
-    separator_list = []
-    pattern_result = ""
-    cur_value_fp = []
-    for str_index in range(len(str_input_list[0])):
-        cur_chr = str_input_list[0][str_index]
-        break_flag = False
-        for string in str_input_list[1:]:
-            if string[str_index] != cur_chr:
-                if str_index == 0 or pattern_result != "":
-                    separator_list.append(pattern_result)
-                    pattern_result = ""
-                break_flag = True
-                if len(cur_value_fp) == 0:
-                    cur_value_fp.append(str_index)
-                break
-        if not break_flag:
-            pattern_result += cur_chr
-            if len(cur_value_fp) == 1:
-                cur_value_fp.append(str_index)
-                value_fp_index_list.append(cur_value_fp.copy())
-                cur_value_fp.clear()
-
-    # check if cur_value_fp has only one position
-    if len(cur_value_fp) == 1:
-        value_fp_index_list.append(cur_value_fp.copy())
-    if pattern_result != "":
-        separator_list.append(pattern_result)
-
-    # get value list
-    value_list = []
-    for string_index_list in value_fp_index_list:
-        temp_list = []
-        for string in str_input_list:
-            if len(string_index_list) == 2 and string_index_list[0] < string_index_list[1]:
-                temp_list.append(string[string_index_list[0]:string_index_list[1]])
-            else:
-                temp_list.append(string[string_index_list[0]:])
-        value_list.append(temp_list.copy())
-
-    return separator_list, value_list
-
-
-def get_value_fp_list(cur_prefix, value_list):
-    """
-    get next value_fp_list for current prefix
-    """
-    # for index in range(len(separator_list)):
-    #     if separator_list[index] == "":
-    #         continue
-    #     if separator_list[index] not in cur_prefix:
-    #         break
-    #
-    # if separator_list[0] == "":
-    #     return value_list[index]
-    # else:
-    #     return value_list[index - 1]
-    if int(len(cur_prefix)/2) < len(value_list):
-        return value_list[int(len(cur_prefix) / 2)]
-    else:
-        return []
-
-
-def get_value_pattern(value_fp_list, threshold=0.5):
-    if len(value_fp_list) > 2 and len(set(value_fp_list)) / len(value_fp_list) >= threshold:
-        return ["Abs_Len" + str(len(value_fp_list[0])) + "|"]
-    elif len(value_fp_list) == 2 and len(set(value_fp_list)) / len(value_fp_list) > threshold:
-        return ["Abs_Len" + str(len(value_fp_list[0])) + "|"]
-    else:
-        return list(set(value_fp_list))
-
-
-def get_next_separator(cur_prefix, separator_list):
-    if separator_list[0] == cur_prefix[0]:
-        if int((len(cur_prefix) + 1) / 2) < len(separator_list):
-            return separator_list[int((len(cur_prefix) + 1) / 2)]
-        else:
-            return ""
-    else:
-        if int(len(cur_prefix) / 2) < len(separator_list):
-            return separator_list[int(len(cur_prefix)/2)]
-        else:
-            return ""
 
 
 def get_suffix_by_prefix(cur_prefix, separator_list, value_list, pattern_list):
+    def get_value_fp_list(cur_prefix, value_list):
+        """
+        get next value_fp_list for current prefix
+        """
+        # for index in range(len(separator_list)):
+        #     if separator_list[index] == "":
+        #         continue
+        #     if separator_list[index] not in cur_prefix:
+        #         break
+        #
+        # if separator_list[0] == "":
+        #     return value_list[index]
+        # else:
+        #     return value_list[index - 1]
+        if int(len(cur_prefix) / 2) < len(value_list):
+            return value_list[int(len(cur_prefix) / 2)]
+        else:
+            return []
+
+    def get_value_pattern(value_fp_list, threshold=0.5):
+        if len(value_fp_list) > 2 and len(set(value_fp_list)) / len(value_fp_list) >= threshold:
+            return ["Abs_Len" + str(len(value_fp_list[0])) + "|"]
+        elif len(value_fp_list) == 2 and value_fp_list[0] != value_fp_list[1]: # len(set(value_fp_list)) / len(value_fp_list) > 0.5:
+            return ["Abs_Len" + str(len(value_fp_list[0])) + "|"]
+        else:
+            return list(set(value_fp_list))
+
+    def get_next_separator(cur_prefix, separator_list):
+        if separator_list[0] == cur_prefix[0]:
+            if int((len(cur_prefix) + 1) / 2) < len(separator_list):
+                return separator_list[int((len(cur_prefix) + 1) / 2)]
+            else:
+                return ""
+        else:
+            if int(len(cur_prefix) / 2) < len(separator_list):
+                return separator_list[int(len(cur_prefix) / 2)]
+            else:
+                return ""
+
+    # main
     value_fp_lit = get_value_fp_list(cur_prefix, value_list)
 
     if value_fp_lit:
@@ -331,6 +266,66 @@ def get_suffix_by_prefix(cur_prefix, separator_list, value_list, pattern_list):
 
 
 def get_patterns_for_cases(cases):
+    def get_separators_and_values(same_len_input_list):
+        """
+
+        """
+        # transform to string
+        str_input_list = [str(x) for x in same_len_input_list]
+
+        # check len
+        check_len = len(str_input_list[0])
+        for x in str_input_list:
+            if len(x) != check_len:
+                mlog.log_func(mlog.ERROR, "Please check your input: ensure that all content in the input is of the same length")
+                mlog.log_list_func(mlog.ERROR, str_input_list)
+                exit(111)
+
+        # get separator list and value index information
+        value_fp_index_list = []
+        separator_list = []
+        pattern_result = ""
+        cur_value_fp = []
+        for str_index in range(len(str_input_list[0])):
+            cur_chr = str_input_list[0][str_index]
+            break_flag = False
+            for string in str_input_list[1:]:
+                if string[str_index] != cur_chr:
+                    if str_index == 0 or pattern_result != "":
+                        separator_list.append(pattern_result)
+                        pattern_result = ""
+                    break_flag = True
+                    if len(cur_value_fp) == 0:
+                        cur_value_fp.append(str_index)
+                    break
+            if not break_flag:
+                pattern_result += cur_chr
+                if len(cur_value_fp) == 1:
+                    cur_value_fp.append(str_index)
+                    value_fp_index_list.append(cur_value_fp.copy())
+                    cur_value_fp.clear()
+
+        # check if cur_value_fp has only one position
+        if len(cur_value_fp) == 1:
+            value_fp_index_list.append(cur_value_fp.copy())
+        if pattern_result != "":
+            separator_list.append(pattern_result)
+
+        # get value list
+        value_list = []
+        for string_index_list in value_fp_index_list:
+            temp_list = []
+            for string in str_input_list:
+                if len(string_index_list) == 2 and string_index_list[0] < string_index_list[1]:
+                    temp_list.append(string[string_index_list[0]:string_index_list[1]])
+                else:
+                    temp_list.append(string[string_index_list[0]:])
+            value_list.append(temp_list.copy())
+
+        return separator_list, value_list
+
+    cases = list(set(cases))
+
     separator_list, value_list = get_separators_and_values(cases)
     init_prefix = [separator_list[0]]
     patterns = []
@@ -354,27 +349,185 @@ def get_patterns_for_cases(cases):
     return patterns
 
 
+def get_patterns_for_feature_payload_list(payload_list_for_cur_feature: list, is_udp=False):
+    """
+
+    :param payload_list_for_cur_feature:
+    :return :
+    """
+    pattern_list = []
+    for each_len_payload_list in payload_list_for_cur_feature:
+        if not is_udp:
+            pattern_list.append(get_patterns_for_cases(each_len_payload_list))
+        else:
+            pattern_list.append(get_udp_payload_pattern(each_len_payload_list))
+
+    return pattern_list
+
 """
+============================================================================
     Use pattern to match
 """
-def pattern_matching(case, patterns):
+
+
+def get_regular_expression_from_pattern(pattern_split: list):
+    """
+
+    :param pattern_split: Split pattern list, such as
+                ["{\"header\":{\"notifyType\":\"deviceDeleted\",\"category\":\"device\",\"timestamp\":\"|--------------|\"},\"body\":{\"devId\":\"",
+                "Abs_Len8|",
+                "-",
+                "Abs_Len4|",
+                "-4"]
+    :return : regular expression
+    """
+    regular_expression = ""
+    for unit in pattern_split:
+        if "Abs_Len" not in unit:
+            regular_expression += re.escape(unit)
+        else:
+            if "|" in unit:
+                unit = unit.replace("|", "")
+            abs_len = unit.split("Abs_Len")[-1]
+            regular_expression += ".{" + abs_len + "}"  # get regular expression
+    return regular_expression
+
+
+def pattern_matching(case, patterns, is_udp=False):
     """
 
     """
-    for pattern in patterns:
-        pattern_str = ""
-        for unit in pattern:
-            if "Abs_Len" not in unit:
-                pattern_str += unit
+    if is_udp:
+        case_split = case.split(":")
+        case_str = ""
+        for index in range(len(case_split)):
+            if "7E" >= case_split[index] >= "20":
+                case_str += chr(int(case_split[index], 16))
             else:
-                abs_len = unit.split("Abs_Len")[-1][:-1]
-                pattern_str += ".{" + abs_len + "}"  # get regular expression
+                case_str += "8"
+        case = case_str
+
+    for pattern in patterns:
+        pattern_str = get_regular_expression_from_pattern(pattern)
+        if pattern_str == "payload_is_None" and (not case or case == pattern_str):
+            return pattern
         if re.match(pattern_str, case):  # re.match? sure?
             return pattern
 
     return None
 
 
+def get_pattern_index_in_pattern_list(pattern, pattern_list):
+    current_pattern_str = "".join(pattern)
+    for pattern_index in range(len(pattern_list)):
+        if current_pattern_str == "".join(pattern_list[pattern_index]):
+            return pattern_index
+    return -1
+
+
+def show_pattern(patterns):
+    pass
+
+
+def split_feature_str_to_pattern_list(feature_str, abs_re = r"Abs_Len\d{1,}\|"):
+    """
+
+    :param feature_str:
+    :return :
+    """
+    match = re.search(abs_re, feature_str)
+    temp_list = []
+    while match:
+        if match.span()[0] > 0:
+            temp_list.append(feature_str[:match.span()[0]])
+        temp_list.append(feature_str[match.span()[0]: match.span()[1]])
+
+        # update
+        feature_str = feature_str[match.span()[1]:]
+        match = re.search(abs_re, feature_str)
+    if feature_str:
+        temp_list.append(feature_str)
+
+    return temp_list
+
+
+def get_udp_payload_pattern(cases):
+    # get readable char list
+    is_readalbe_char_list = [1] * len(cases[0].split(":"))
+
+    for index in range(len(is_readalbe_char_list)):
+        for item in cases:
+            if not ("7E" >= item.split(":")[index] >= "20"):
+                is_readalbe_char_list[index] = 0
+                break
+
+    zero_count = 0
+    one_count = 0
+    udp_payload_pattern_by_readable_list = []
+    for index in range(len(is_readalbe_char_list)):
+        if is_readalbe_char_list[index]:
+            if zero_count:
+                udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
+                zero_count = 0
+            one_count += 1
+        else:
+            if one_count:
+                udp_payload_pattern_by_readable_list.append(one_count)
+                one_count = 0
+            zero_count += 1
+    if zero_count:
+        udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
+    if one_count:
+        udp_payload_pattern_by_readable_list.append(one_count)
+
+    # convert byte to text
+    for case_index in range(len(cases)):
+        case_split = cases[case_index].split(":")
+        temp_case = []
+        readable_item_index = 0
+        case_split_index = 0
+        while readable_item_index < len(udp_payload_pattern_by_readable_list):
+            if type(udp_payload_pattern_by_readable_list[readable_item_index]) == int:
+                temp_str = ""
+                for case_split_index in range(case_split_index, case_split_index + udp_payload_pattern_by_readable_list[readable_item_index]):
+                    temp_str += chr(int(case_split[case_split_index], 16))
+                temp_case.append(temp_str)
+            else:
+                t_count = int(udp_payload_pattern_by_readable_list[readable_item_index][7:-1])
+                case_split_index += (t_count + 1)
+                temp_case.append(udp_payload_pattern_by_readable_list[readable_item_index])
+
+            readable_item_index += 1
+
+        cases[case_index] = "".join(temp_case)
+
+    temp_patterns = get_patterns_for_cases(cases)
+
+    for pattern_index in range(len(temp_patterns)):
+        temp_after_process_pattern = []
+        for pat_item in temp_patterns[pattern_index]:
+            if pat_item:
+                temp_after_process_pattern.extend(split_feature_str_to_pattern_list(pat_item))
+
+        # merge
+        merged_pattern = []
+        while temp_after_process_pattern:
+            cur_item = temp_after_process_pattern.pop(0)
+            if "Abs_Len" not in cur_item:
+                merged_pattern.append(cur_item)
+            else:
+                new_len = int(cur_item[len("Abs_Len"):-1])
+                while temp_after_process_pattern and "Abs_Len" in temp_after_process_pattern[0]:
+                    new_len += int(temp_after_process_pattern.pop(0)[len("Abs_Len"):-1])
+                merged_pattern.append(f"Abs_Len{new_len}|")
+
+        temp_patterns[pattern_index] = merged_pattern
+
+    # print(temp_patterns)
+    return temp_patterns
+
 if __name__ == "__main__":
-    input_string = "{\"header\":{\"notifyType\":\"deviceDataChanged\",\"requestId\":\"e6e82cf4-fa34-43f3-90e6-8ee9c6bf538c\",\"from\":\"data-manager\",\"to\":\"app\",\"category\":\"device\",\"timestamp\":\"20240219T080517Z\"},\"body\":{\"devId\":\"cd14156e-6371-4d5e-a380-194f86c72afb\",\"services\":[{\"st\":\"switch\",\"data\":{\"on\":1},\"sid\":\"switch\",\"ts\":\"20240219T080517150Z\"}],\"gatewayId\":\"cd14156e-6371-4d5e-a380-194f86c72afb\"}}"
-    print(remove_string_by_some_pattern(input_string))
+    test_patterns = [['C', 'Abs_Len7|', 'switch', 'Abs_Len1|', '2', 'Abs_Len19|', '-', 'Abs_Len9|', '-', 'Abs_Len4|', '-4', 'Abs_Len3|', '-', 'Abs_Len4|', '-', 'Abs_Len22|', '-', 'Abs_Len4|', '-4', 'Abs_Len3|', '-', 'Abs_Len4|', '-', 'Abs_Len13|', '#', 'Abs_Len51|', '=', 'Abs_Len1|', '54B00FF41EAF682D', 'Abs_Len65|']]
+    test_str = '43:02:45:fc:db:e3:d1:b6:73:77:69:74:63:68:11:32:ed:06:e7:02:50:66:69:6f:45:4a:6e:5a:35:4d:6b:71:68:75:6d:2d:17:64:34:63:35:64:38:35:65:2d:37:32:64:66:2d:34:39:31:32:2d:38:30:39:31:2d:65:62:34:31:37:34:35:66:61:34:66:65:1d:17:61:64:31:34:34:64:38:30:2d:31:35:65:61:2d:34:37:35:61:2d:61:34:66:32:2d:36:38:66:39:36:32:66:39:61:64:34:61:1d:23:b4:51:79:fd:46:d5:bd:31:df:92:18:9d:57:28:23:d1:c2:b5:a9:cd:6a:99:13:95:ff:cf:51:15:b5:64:38:90:95:44:7c:46:b3:71:5c:cf:92:17:1f:7d:38:33:76:13:12:50:67:3d:03:35:34:42:30:30:46:46:34:31:45:41:46:36:38:32:44:ff:12:64:ec:09:a1:c6:3d:93:1c:3c:5c:f0:7d:ce:09:e8:d3:1b:23:8b:d7:c0:ec:9b:0d:e6:4e:cd:56:d1:0f:8c:e4:7d:7f:96:43:ae:bf:5c:86:f7:d1:38:42:b9:ac:04:77:51:27:54:49:0d:42:02:8e:ab:84:4b:20:29:0c:31'
+    feature = "101010|udp|ddd|||||"
+    print(pattern_matching(test_str, test_patterns, "udp" in feature))
