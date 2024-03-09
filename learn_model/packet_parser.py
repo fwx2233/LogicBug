@@ -941,11 +941,11 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
             current_line_str = "|".join(list(item.values())[start_index:])
             # get the corresponding pattern of this line str
             line_pattern = payload_pattern_features[format_tools.get_pattern_index_in_pattern_list(format_tools.pattern_matching(current_line_str, payload_pattern_features), payload_pattern_features)]
-            if line_pattern:
+            if line_pattern and line_pattern != -1:
                 try:
                     current_line_str = "".join(line_pattern)
                 except TypeError:
-                    mlog.log_func(mlog.ERROR, f"TypeError, bad pattern: {line_pattern}")
+                    mlog.log_func(mlog.ERROR, f"TypeError, bad pattern: {line_pattern}, current line: {current_line_str}")
                     return None
             else:
                 mlog.log_func(mlog.DEBUG, f"Not in database: {current_line_str}")

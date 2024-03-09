@@ -418,11 +418,15 @@ def pattern_matching(case, patterns, is_udp=False):
 
 
 def get_pattern_index_in_pattern_list(pattern, pattern_list):
-    current_pattern_str = "".join(pattern)
-    for pattern_index in range(len(pattern_list)):
-        if current_pattern_str == "".join(pattern_list[pattern_index]):
-            return pattern_index
-    return -1
+    try:
+        current_pattern_str = "".join(pattern)
+        for pattern_index in range(len(pattern_list)):
+            if current_pattern_str == "".join(pattern_list[pattern_index]):
+                return pattern_index
+        return -1
+    except TypeError:
+        mlog.log_func(mlog.ERROR, f"TypeError, bad pattern: {pattern}")
+        return -1
 
 
 def show_pattern(patterns):
