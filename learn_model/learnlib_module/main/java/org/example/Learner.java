@@ -221,8 +221,11 @@ public class Learner {
                     LogManager.logger.logPhase("The same nondeterministic query is generated too many times");
                     network.closeConnection();
                 }
-            } catch (IllegalMonitorStateException e) {
-                LogManager.logger.logPhase("Restart for IllegalMonitorStateException");
+            } catch (IllegalMonitorStateException | IndexOutOfBoundsException e) {
+                LogManager.logger.logPhase("Restart for RestartException");
+                cache.reloadCache();
+                reLearn();
+                cache.index = 1;
             }
         }
     }
@@ -365,15 +368,15 @@ public class Learner {
             System.out.println("resetNum: " + cache.resetNum);
         } else if (currentStage == EQUIVALENCE_STAGE) {
             LogManager.logger.logPhase("Check conflict query during equivalence");
-            cache.reloadCache();
             System.out.println("queryNum: " + queryNum);
             System.out.println("resetNum: " + cache.resetNum);
-            if (queryNum == cache.resetNum) {
+            if (lastConflictNum == cache.index) {
                 restartNum++;
             } else
                 restartNum = 0;
-            if (restartNum > 3)
+            if (restartNum > 3) {
                 return false;
+            }
             System.out.println("restartNum: " + restartNum);
         }
         LogManager.logger.logPhase("Restart for conflict query");

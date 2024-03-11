@@ -18,13 +18,6 @@ from log import mlog
 from config import device_appium_config, button_constrain
 from learn_model.my_check import check_if_frida_server_is_start
 
-test_button_list = ['ADU1CWRD88:97:46:2C:9A:CE', 'SDU1CWRU2D88:97:46:2C:9A:CE', 'SAU1CWRU2', 'USU1CWRU2',
-                    'RDU1CWRD88:97:46:2C:9A:CE', 'DCU1']
-custom_order_dict = {
-    'ADU1CWRD88:97:46:2C:9A:CE': 0,
-    'RDU1CWRD88:97:46:2C:9A:CE': len(test_button_list) - 1
-}
-
 
 def random_list(button_list: list) -> list:
     """
@@ -345,7 +338,9 @@ class DeviceCls:
 
     def start_driver_and_init(self):
         self.start_driver()
-        self.back_to_home()
+        while not self.back_to_home():
+            # self.stop_and_restart_app()
+            pass
 
     def stop_driver(self):
         mlog.log_func(mlog.LOG, f"Driver <{self.DEVICE_NAME}> quit")
@@ -362,6 +357,11 @@ class DeviceCls:
         # stop hook
         self.stop_frida_hook()
 
+    def stop_and_restart_app(self):
+        mlog.log_func(mlog.LOG, f"Device <{self.DEVICE_NAME}> stop and restart APP <{self.APK_NAME}>")
+        command = f"adb -s {self.UDID} shell am force-stop {self.APK_NAME} && adb -s {self.UDID} shell am start -n {self.APK_NAME}/{self.APP_ACTIVITY}"
+        os.system(command)
+
     def back_to_home(self):
         mlog.log_func(mlog.LOG, "Back to homepage")
         command = f"adb -s {self.UDID} shell am start -n {self.APK_NAME}/{self.APP_ACTIVITY}"
@@ -370,20 +370,26 @@ class DeviceCls:
             os.system(command)
             time.sleep(0.5)
             back_count += 1
+
+            # something wrong with frida or appium or app
             if back_count > 10:
-                # something wrong with frida or appium or app
                 mlog.log_func(mlog.ERROR, "Something wrong with frida or appium or app, please [restart app and restart learn]")
+
+                # restart app
+                self.stop_and_restart_app()
+
                 from scripts import do_kill
                 do_kill.kill_main()
-                # self.stop_learn()
-                # self.stop_driver()
-                exit(-1)
+
+                return False
 
         # back to home page
         while not self.click_button("BackHome"):
             mlog.log_func(mlog.LOG, "Press back-system")
             self.driver.back()
             time.sleep(0.5)
+
+        return True
 
     def click_and_save(self, ui_name, waiting_time=3):
         """
@@ -766,143 +772,159 @@ def learn_model_main(scan_result_name, database, learn_dir_name="learnlib_learn"
     # pass the alphabet to the learner
     overlook_list = ["user1|AS", "user1|SDU1CWR", "user1|VD1S", #"user1|ADU1CWR", "user1|RDU1CWR", "user1|DCU1",
                      "user2|AcceptDeviceShare", "user2|RejectDeviceShare", "user2|AcceptInvite", "user2|DenyInvite"]
+    reset_op_list = ["user1|USU1CWRU2", "user1|VD1S", "user1|RDU1CWR", "user2|DenyInvite"]
     learn_entity.load_alphabet(overlook_list)
 
-    # create device entity for click
-    pixel7_entity = DeviceCls(scan_result_name, "pixel7", "user1", frida_flag=True)
-    pixel7_entity.start_driver_and_init()
-    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", frida_flag=False)
-    nexus_entity.start_driver_and_init()
+    pro_end_flag = False
 
-    # for index
-    user_device_entity_dict = {
-        "user1": pixel7_entity,
-        "user2": nexus_entity
-    }
+    while not pro_end_flag:
+        # create device entity for click
+        pixel7_entity = DeviceCls(scan_result_name, "pixel7", "user1", frida_flag=True)
+        pixel7_entity.start_driver_and_init()
+        nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", frida_flag=False)
+        nexus_entity.start_driver_and_init()
 
-    # # start tshark
-    pixel7_entity.start_tshark(learn_dir_name)
-    time.sleep(5)
+        # for index
+        user_device_entity_dict = {
+            "user1": pixel7_entity,
+            "user2": nexus_entity
+        }
 
-    # get constrain dictionary
-    mlog.log_func(mlog.LOG, "Get constrain rules")
-    mlog.log_dict_func(mlog.LOG, button_constrain.constrain_dict)
-    mlog.log_dict_func(mlog.LOG, button_constrain.conflict_dic)
+        # # start tshark
+        pixel7_entity.start_tshark(learn_dir_name)
+        time.sleep(5)
 
-    # A stack, store current cache
-    run_cache = []
-    if_normal = False
+        # get constrain dictionary
+        mlog.log_func(mlog.LOG, "Get button constrain rules")
+        mlog.log_dict_func(mlog.LOG, button_constrain.constrain_dict)
+        mlog.log_dict_func(mlog.LOG, button_constrain.conflict_dic)
 
-    # learning
-    while True:
-        try:
-            option = learn_entity.get_input_from_learner()
+        # A stack, store current cache
+        run_cache = []
+        if_normal = False
 
-            if option == "closeConnect":
-                mlog.log_func(mlog.LOG, "Stop learning...")
-                learn_entity.response_to_learner("close the client")
-                learn_entity.close_socket()
-                if_normal = True
+        # learning
+        while True:
+            try:
+                option = learn_entity.get_input_from_learner()
+
+                if option == "closeConnect":
+                    mlog.log_func(mlog.LOG, "Stop learning...")
+                    learn_entity.response_to_learner("close the client")
+                    learn_entity.close_socket()
+                    if_normal = True
+                    pro_end_flag = True
+                    break
+
+                if option == "checkCounterExample":
+                    mlog.log_func(mlog.LOG, "Check the counter example...")
+                    learn_entity.response_to_learner("WaitForChecking")
+                    continue
+
+                if option == "Reset":
+                    for reset_option in reset_op_list:
+                        mlog.log_func(mlog.LOG, f"Reset--{reset_option}")
+                        user = reset_option.split("|")[0]
+                        cur_reset_option = reset_option.split("|")[-1]
+
+                        # back to home
+                        if not user_device_entity_dict[user].back_to_home():
+                            break
+                        user_device_entity_dict[user].click_button(cur_reset_option)
+
+                    # clear cache
+                    run_cache.clear()
+                    """
+                    how to check?
+                    """
+
+                    learn_entity.response_to_learner("Reset_suc")
+                    continue
+
+                # check if current option is in constrain list
+                if option in button_constrain.constrain_dict and button_constrain.constrain_dict[option] not in run_cache:
+                    # can not tap
+                    mlog.log_func(mlog.LOG, f"Option: {option} can't tap --- by cache")
+                    mlog.log_func(mlog.LOG, f"Current cache: ")
+                    mlog.log_list_func(mlog.LOG, run_cache)
+                    learn_entity.response_to_learner("NoElement")
+                    continue
+
+                # update cache
+                if option in button_constrain.conflict_dic and button_constrain.conflict_dic[option] in run_cache:
+                    run_cache.remove(button_constrain.conflict_dic[option])
+                if option in button_constrain.conflict_dic.values() and option not in run_cache:
+                    run_cache.append(option)
+
+                mlog.log_func(mlog.DEBUG, f"After add, run_cache: {run_cache}")
+
+                user = option.split("|")[0]
+                option = option.split("|")[-1]
+
+                if not user_device_entity_dict[user].back_to_home():
+                    break
+
+                # click and response
+                time_list = user_device_entity_dict[user].click_and_save(option, waiting_time=3)
+                if time_list:
+                    class_result = user_device_entity_dict[user].parse_packet_and_get_response(database,
+                                                                                               user_device_entity_dict[
+                                                                                                   user].cur_packet_name,
+                                                                                               option, time_list[0],
+                                                                                               time_list[1])
+                    if class_result:
+                        learn_entity.response_to_learner(class_result)
+                    else:
+                        mlog.log_func(mlog.ERROR, f"Option <{option}> No classify result, can not response to learner")
+                        pro_end_flag = True
+                        break
+
+                    if option == "SAU1CWRU2" and time_list:
+                        mlog.log_func(mlog.DEBUG, "Current operation is <SA>, waiting for user2 agree")
+                        if not user_device_entity_dict["user2"].back_to_home():
+                            break
+                        user_device_entity_dict["user2"].click_button("AcceptInvite")
+                else:
+                    # can not tap
+                    mlog.log_func(mlog.LOG, f"Option: {option} can't tap")
+                    learn_entity.response_to_learner("NoElement")
+
+                    # check if device is offline
+                    if option == "ADU1CWR" and "user1|ADU1CWR" not in run_cache:
+                        # device offline
+                        mlog.log_func(mlog.ERROR, "Device Offline, please check")
+                        pro_end_flag = True
+                        break
+
+            except BrokenPipeError:
+                mlog.log_func(mlog.ERROR, "Server has broken, quit")
+                pro_end_flag = True
                 break
 
-            if option == "checkCounterExample":
-                mlog.log_func(mlog.LOG, "Check the counter example...")
-                learn_entity.response_to_learner("WaitForChecking")
-                continue
+        if if_normal:
+            mlog.log_func(mlog.LOG, "Learn program stop normally")
+            pro_end_flag = True
+        else:
+            mlog.log_func(mlog.ERROR, "Something error in learning, please check log")
+            if pro_end_flag:
+                learn_entity.close_socket()
 
-            if option == "Reset":
-                mlog.log_func(mlog.LOG, "Reset--USU1CWRU2")
-                user_device_entity_dict["user1"].back_to_home()
-                user_device_entity_dict["user1"].click_button("USU1CWRU2")
-                mlog.log_func(mlog.LOG, "Reset--VD1S")
-                user_device_entity_dict["user1"].back_to_home()
-                user_device_entity_dict["user1"].click_button("VD1S")
-                mlog.log_func(mlog.LOG, "Reset--RDU1CWR")
-                user_device_entity_dict["user1"].back_to_home()
-                user_device_entity_dict["user1"].click_button("RDU1CWR")
+        # # learn stop, back to home
+        # pixel7_entity.back_to_home()
+        # nexus_entity.back_to_home()
 
-                mlog.log_func(mlog.LOG, "Reset--DenyInvite")
-                user_device_entity_dict["user2"].back_to_home()
-                user_device_entity_dict["user2"].click_button("DenyInvite")
+        # stop packet capture, close android driver
+        pixel7_entity.stop_learn()
 
-                # clear cache
-                run_cache.clear()
-                """
-                how to check?
-                """
+        # stop driver
+        pixel7_entity.stop_driver()
+        nexus_entity.stop_driver()
 
-                learn_entity.response_to_learner("Reset_suc")
-                continue
-
-            # check if current option is in constrain list
-            if option in button_constrain.constrain_dict and button_constrain.constrain_dict[option] not in run_cache:
-                # can not tap
-                mlog.log_func(mlog.LOG, f"Option: {option} can't tap --- by cache")
-                mlog.log_func(mlog.LOG, f"Current cache: ")
-                mlog.log_list_func(mlog.LOG, run_cache)
-                learn_entity.response_to_learner("NoElement")
-                continue
-
-            if option in button_constrain.conflict_dic and button_constrain.conflict_dic[option] in run_cache:
-                run_cache.remove(button_constrain.conflict_dic[option])
-
-            if option in button_constrain.conflict_dic.values() and option not in run_cache:
-                run_cache.append(option)
-
-            mlog.log_func(mlog.DEBUG, f"After add, run_cache: {run_cache}")
-
-            user = option.split("|")[0]
-            option = option.split("|")[-1]
-
-            user_device_entity_dict[user].back_to_home()
-            time_list = user_device_entity_dict[user].click_and_save(option, waiting_time=3)
-
-            if time_list:
-                class_result = user_device_entity_dict[user].parse_packet_and_get_response(database,
-                                                                                           user_device_entity_dict[
-                                                                                               user].cur_packet_name,
-                                                                                           option, time_list[0],
-                                                                                           time_list[1])
-                # mlog.log_func(mlog.LOG, class_result)
-                if class_result:
-                    learn_entity.response_to_learner(class_result)
-                else:
-                    break
-
-                if option == "SAU1CWRU2" and time_list:
-                    mlog.log_func(mlog.DEBUG, "Current operation is <SA>, waiting for user2 agree")
-                    user_device_entity_dict["user2"].back_to_home()
-                    user_device_entity_dict["user2"].click_button("AcceptInvite")
-            else:
-                # can not tap
-                mlog.log_func(mlog.LOG, f"Option: {option} can't tap")
-                learn_entity.response_to_learner("NoElement")
-
-                # check if device is offline
-                if option == "ADU1CWR" and "user1|ADU1CWR" not in run_cache:
-                    # device offline
-                    mlog.log_func(mlog.ERROR, "Device Offline, please check")
-                    break
-        except BrokenPipeError:
-            mlog.log_func(mlog.ERROR, "Server has broken, quit")
+        if not pro_end_flag:
             break
+            learn_entity.response_to_learner("RestartLearning")
 
-    if if_normal:
-        mlog.log_func(mlog.LOG, "Learn program stop normally")
-    else:
-        mlog.log_func(mlog.ERROR, "Something error in learning, please check log")
-        learn_entity.close_socket()
-
-    # learn stop, back to home
-    pixel7_entity.back_to_home()
-    nexus_entity.back_to_home()
-
-    # stop packet capture, close android driver
-    pixel7_entity.stop_learn()
-
-    # stop driver
-    pixel7_entity.stop_driver()
-    nexus_entity.stop_driver()
+    mlog.log_func(mlog.LOG, "Learn finish")
 
 
 if __name__ == "__main__":

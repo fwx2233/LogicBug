@@ -3,6 +3,9 @@ package org.example;
 import de.learnlib.api.SUL;
 import net.automatalib.words.impl.GrowingMapAlphabet;
 
+import java.io.IOException;
+import java.util.Objects;
+
 public class IoTSUL implements SUL<String, String> {
     GrowingMapAlphabet<String> alphabet;
     NetworkManager network;
@@ -39,10 +42,16 @@ public class IoTSUL implements SUL<String, String> {
                 LogManager.logger.logQuery("[CACHE] Step: " + symbol + " - Result: " + result);
             }else {
                 result = network.sendQuery(NetworkManager.QUERY_MESSAGE, symbol);
+
+                if (Objects.equals(result, "Frida")) {
+                    LogManager.logger.logEvent("[WRONG] " + result);
+                    throw new RestartException(result);
+                }
+                LogManager.logger.logEvent("[TEST] " + result);
                 cache.add(symbol, result);
                 LogManager.logger.logQuery("[QUERY] Step: " + symbol + " - Result: " + result);
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             LogManager.logger.logEvent("[WRONG] Step fail: " + symbol);
         }
         return result;
