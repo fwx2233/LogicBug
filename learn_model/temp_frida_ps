@@ -1,3 +1,0 @@
-ubuntu1+  12962  0.0  0.0  32824  3800 pts/6    Sl+  08:23   0:00 adb shell
-ubuntu1+  22053  0.0  0.0   4504   704 ?        S    11:26   0:00 sh -c ps aux|grep "adb shell" > /home/ubuntu1604/Desktop/logic_bug/learn_model/temp_frida_ps
-ubuntu1+  22055  0.0  0.0  14224   928 ?        S    11:26   0:00 grep adb shell
