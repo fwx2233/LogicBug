@@ -450,46 +450,46 @@ def pre_parse(dataset_list: list):
 
         dataset_path = PACKET_ROOT_PATH + dataset + "/"
 
-        all_packet_folder_list = os.listdir(dataset_path)
-        for operation_folder in all_packet_folder_list:
-            if not os.path.isdir(dataset_path + operation_folder):
-                continue
-
-            mlog.log_func(mlog.LOG, f"-Operation: {operation_folder}")
-            # get operation folder
-            abs_operation_folder = dataset_path + operation_folder + "/"
-            file_list = os.listdir(abs_operation_folder)
-            # for each pcapng file, get its feature.csv file
-            for item in file_list:
-                if item.split('.')[-1] == "txt" and operation_folder in item:
-                    temp_count += 1
-                    mlog.log_func(mlog.LOG, str(temp_count) + " Reading file: " + item, t_count=1)
-                    with open(abs_operation_folder + item, "r") as f:
-                        lines = f.readlines()
-                        pcap_name = lines[0].replace("\n", "")
-                        start_time = lines[1].replace("\n", "")
-                        end_time = lines[2].replace("\n", "")
-
-                    # get the knowledge of dns mapping from ip to domain
-                    dns_mapping_list = parse_dns_and_get_ip_domain(dataset + ".pcapng")
-
-                    # read pcap file and extract features
-                    keylog_file = pcap_name.split('.')[0] + ".txt"
-                    cur_wireshark_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(blackname_dict)
-                    pcap = pyshark.FileCapture(dataset_path + pcap_name, display_filter=cur_wireshark_filter_expression,
-                                               override_prefs={'ssl.keylog_file': dataset_path + keylog_file})
-                    get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_name=item)
-                    pcap.close()
-
-                    while(len(lines) > 3):
-                        lines.pop(-1)
-                    lines.append("\n" + cur_wireshark_filter_expression)
-                    with open(abs_operation_folder + item, "w") as f:
-                        f.writelines(lines)
-
-        # read dataset and get pattern
-        pattern = get_url_pattern(dataset)
-        modify_dataset_by_pattern(dataset, pattern)
+        # all_packet_folder_list = os.listdir(dataset_path)
+        # for operation_folder in all_packet_folder_list:
+        #     if not os.path.isdir(dataset_path + operation_folder):
+        #         continue
+        #
+        #     mlog.log_func(mlog.LOG, f"-Operation: {operation_folder}")
+        #     # get operation folder
+        #     abs_operation_folder = dataset_path + operation_folder + "/"
+        #     file_list = os.listdir(abs_operation_folder)
+        #     # for each pcapng file, get its feature.csv file
+        #     for item in file_list:
+        #         if item.split('.')[-1] == "txt" and operation_folder in item:
+        #             temp_count += 1
+        #             mlog.log_func(mlog.LOG, str(temp_count) + " Reading file: " + item, t_count=1)
+        #             with open(abs_operation_folder + item, "r") as f:
+        #                 lines = f.readlines()
+        #                 pcap_name = lines[0].replace("\n", "")
+        #                 start_time = lines[1].replace("\n", "")
+        #                 end_time = lines[2].replace("\n", "")
+        #
+        #             # get the knowledge of dns mapping from ip to domain
+        #             dns_mapping_list = parse_dns_and_get_ip_domain(dataset + ".pcapng")
+        #
+        #             # read pcap file and extract features
+        #             keylog_file = pcap_name.split('.')[0] + ".txt"
+        #             cur_wireshark_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(blackname_dict)
+        #             pcap = pyshark.FileCapture(dataset_path + pcap_name, display_filter=cur_wireshark_filter_expression,
+        #                                        override_prefs={'ssl.keylog_file': dataset_path + keylog_file})
+        #             get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_name=item)
+        #             pcap.close()
+        #
+        #             while(len(lines) > 3):
+        #                 lines.pop(-1)
+        #             lines.append("\n" + cur_wireshark_filter_expression)
+        #             with open(abs_operation_folder + item, "w") as f:
+        #                 f.writelines(lines)
+        #
+        # # read dataset and get pattern
+        # pattern = get_url_pattern(dataset)
+        # modify_dataset_by_pattern(dataset, pattern)
 
         """
             ================================ module 2 ================================
@@ -500,12 +500,11 @@ def pre_parse(dataset_list: list):
         feature_filter_by_general_list = []
 
         # Collect statistics on features whose number of occurrences exceeds the threshold
-        black_dict = dict()
         with open(ROOT_PATH + "/../config/black_list.json", "r") as bf:
             black_dict = json.load(bf)
-            # black_uri_list = black_dict["request_uri"]
 
-        feature_filter_by_general_list.extend(black_dict["full_feature"])
+        if "full_feature" in black_dict:
+            feature_filter_by_general_list.extend(black_dict["full_feature"])
 
         feature_ops_dict = {}
         count_of_op = 0
@@ -804,10 +803,6 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
     # get selected features from database(use payload pattern features)
     with open(op_root_path + "payload_pattern.json", "r") as f:
         selected_features_list = list(json.load(f).keys())
-    # with open(op_root_path + "selected_features.txt", "r") as f:
-    #     for line in f.readlines():
-    #         if line:
-    #             selected_features_list.append(line.replace("\n", ""))
 
     # Convert features to regular expressions
     # convert filtered_features to patterns
@@ -819,12 +814,11 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
 
     # get the knowledge of dns mapping from ip to domain
     dns_mapping = parse_dns_and_get_ip_domain(new_pcapng_file_name)
+
     # get blackname list
+    mlog.log_func(mlog.LOG, "Get black list from file...")
     with open(ROOT_PATH + "/../config/black_list.json", "r") as bf:
         black_dict = json.load(bf)
-
-    mlog.log_func(mlog.LOG, "Get black list from file...")
-    # mlog.log_dict_func(mlog.LOG, black_dict)
 
     # generate filter expression of current operation
     new_op_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict)
@@ -862,6 +856,7 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
         if jump_flag:
             continue
 
+        # sort by name
         for key in fieldnames_of_csv:
             if ori_dict.get(key):
                 sorted_header_feature_dict[key] = ori_dict.get(key)
@@ -872,6 +867,13 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
         current_line_str = "|".join(list(sorted_header_feature_dict.values())[start_index:])
         if not format_tools.pattern_matching(current_line_str, filtered_features_list):
             # not in filtered feature list
+            """
+            [debug]
+            """
+            # jump if not in selected_features_list
+            if not format_tools.pattern_matching(current_line_str, selected_features_list):
+                continue
+
             sorted_header_feature_list.append(sorted_header_feature_dict)
             if sorted_header_feature_dict["protocol"] != "http":
                 # get packet number in pcapng file
@@ -911,13 +913,6 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
     with open(database_classify_file_path, "r") as f:
         database_classify_result = json.load(f)
 
-    """
-    
-    """
-    if new_feature_index_list:
-        mlog.log_func(mlog.DEBUG, "Clear new feature for test")
-        new_feature_index_list.clear()
-
     # get classify result for new operation
     if not new_feature_index_list:
         # each feature has appeared
@@ -940,22 +935,24 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
 
             current_line_str = "|".join(list(item.values())[start_index:])
             # get the corresponding pattern of this line str
-            line_pattern = payload_pattern_features[format_tools.get_pattern_index_in_pattern_list(format_tools.pattern_matching(current_line_str, payload_pattern_features), payload_pattern_features)]
-            if line_pattern and line_pattern != -1:
+            line_pattern_index = format_tools.get_pattern_index_in_pattern_list(format_tools.pattern_matching(current_line_str, payload_pattern_features), payload_pattern_features)
+            if line_pattern_index != -1:
                 try:
+                    line_pattern = payload_pattern_features[line_pattern_index]
                     current_line_str = "".join(line_pattern)
                 except TypeError:
                     mlog.log_func(mlog.ERROR, f"TypeError, bad pattern: {line_pattern}, current line: {current_line_str}")
-                    return None
+                    # return None
+                    continue
             else:
-                mlog.log_func(mlog.DEBUG, f"Not in database: {current_line_str}")
+                mlog.log_func(mlog.DEBUG, f"Not matching pattern in database: {current_line_str}")
                 continue
 
             """
-            
+            [debug]
             """
             if current_line_str not in payload_pattern_dict:
-                mlog.log_func(mlog.DEBUG, f"Not in database: {current_line_str}")
+                mlog.log_func(mlog.DEBUG, f"Current_line_str not in database: {current_line_str}, continue")
                 continue
 
             current_feature_patterns = payload_pattern_dict[current_line_str]

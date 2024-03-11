@@ -32,13 +32,14 @@ def kill_appium():
         with open(fine_name, "r") as f:
             lines = f.readlines()
         if len(lines) > 1:
-            admin_proc = subprocess.Popen(["echo", admin_password], stdout=subprocess.PIPE)
+            # admin_proc = subprocess.Popen(["echo", admin_password], stdout=subprocess.PIPE)
 
             for lin in lines[:-2]:
                 porc_id = lin.split()[1]
                 command = "sudo -S kill -9 " + porc_id
-                temp_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout)
-            admin_proc.kill()
+                # temp_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout)
+                os.system('echo %s | sudo -S %s' % (admin_password, command))
+            # admin_proc.kill()
 
         os.remove(fine_name)
 
@@ -47,23 +48,21 @@ def kill_mitm():
     admin_proc = subprocess.Popen(["echo", admin_password], stdout=subprocess.PIPE)
     # get process id
     file_name = ROOT_PATH + "/1.txt"
-    command = "sudo -S netstat -tunlp|grep 8080 > " + file_name
-    # save_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout, stdout=subprocess.PIPE)
-    os.system('echo %s | sudo -S %s' % (admin_password, command))
+    command = "ps aux|grep mitmdump > " + file_name
+    os.system(command)
 
     # parse id and kill mitm process
     if os.path.exists(file_name):
         with open(file_name, "r") as f:
             lines = f.readlines()
             if lines:
-                process_id = lines[0].split()[-1].split("/")[0]
-                command = "sudo -S kill -9 " + process_id
-                # temp_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout)
+                process_id = lines[0].split()[1]
+                command = "kill -9 " + process_id
                 os.system('echo %s | sudo -S %s' % (admin_password, command))
         os.remove(file_name)
-    # clear iptables
 
-    command = "sudo -S bash " + ROOT_PATH + "/clear_iptables.bash"
+    # clear iptables
+    command = "bash " + ROOT_PATH + "/clear_iptables.bash"
     os.system('echo %s | sudo -S %s' % (admin_password, command))
 
     admin_proc.kill()
@@ -89,8 +88,12 @@ def kill_frida():
         os.remove(fine_name)
 
 
-# stop tshark and chmod
-kill_tshark()
-kill_appium()
-# kill_mitm()
-kill_frida()
+def kill_main():
+    kill_tshark()
+    kill_appium()
+    kill_mitm()
+    kill_frida()
+
+
+if __name__ == "__main__":
+    kill_main()

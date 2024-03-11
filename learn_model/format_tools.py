@@ -398,14 +398,18 @@ def pattern_matching(case, patterns, is_udp=False):
 
     """
     if is_udp:
-        case_split = case.split(":")
-        case_str = ""
-        for index in range(len(case_split)):
-            if "7E" >= case_split[index] >= "20":
-                case_str += chr(int(case_split[index], 16))
-            else:
-                case_str += "8"
-        case = case_str
+        raw_case = case
+        try:
+            case_split = case.split(":")
+            case_str = ""
+            for index in range(len(case_split)):
+                if "7E" >= case_split[index] >= "20":
+                    case_str += chr(int(case_split[index], 16))
+                else:
+                    case_str += "8"
+            case = case_str
+        except ValueError:
+            mlog.log_func(mlog.ERROR, f"ValueError in format_tools.py--pattern_matching(), current case: {raw_case}\n\tcurrent patterns: {patterns}")
 
     for pattern in patterns:
         pattern_str = get_regular_expression_from_pattern(pattern)
@@ -531,7 +535,18 @@ def get_udp_payload_pattern(cases):
     return temp_patterns
 
 if __name__ == "__main__":
-    test_patterns = [['C', 'Abs_Len7|', 'switch', 'Abs_Len1|', '2', 'Abs_Len19|', '-', 'Abs_Len9|', '-', 'Abs_Len4|', '-4', 'Abs_Len3|', '-', 'Abs_Len4|', '-', 'Abs_Len22|', '-', 'Abs_Len4|', '-4', 'Abs_Len3|', '-', 'Abs_Len4|', '-', 'Abs_Len13|', '#', 'Abs_Len51|', '=', 'Abs_Len1|', '54B00FF41EAF682D', 'Abs_Len65|']]
-    test_str = '43:02:45:fc:db:e3:d1:b6:73:77:69:74:63:68:11:32:ed:06:e7:02:50:66:69:6f:45:4a:6e:5a:35:4d:6b:71:68:75:6d:2d:17:64:34:63:35:64:38:35:65:2d:37:32:64:66:2d:34:39:31:32:2d:38:30:39:31:2d:65:62:34:31:37:34:35:66:61:34:66:65:1d:17:61:64:31:34:34:64:38:30:2d:31:35:65:61:2d:34:37:35:61:2d:61:34:66:32:2d:36:38:66:39:36:32:66:39:61:64:34:61:1d:23:b4:51:79:fd:46:d5:bd:31:df:92:18:9d:57:28:23:d1:c2:b5:a9:cd:6a:99:13:95:ff:cf:51:15:b5:64:38:90:95:44:7c:46:b3:71:5c:cf:92:17:1f:7d:38:33:76:13:12:50:67:3d:03:35:34:42:30:30:46:46:34:31:45:41:46:36:38:32:44:ff:12:64:ec:09:a1:c6:3d:93:1c:3c:5c:f0:7d:ce:09:e8:d3:1b:23:8b:d7:c0:ec:9b:0d:e6:4e:cd:56:d1:0f:8c:e4:7d:7f:96:43:ae:bf:5c:86:f7:d1:38:42:b9:ac:04:77:51:27:54:49:0d:42:02:8e:ab:84:4b:20:29:0c:31'
-    feature = "101010|udp|ddd|||||"
-    print(pattern_matching(test_str, test_patterns, "udp" in feature))
+    # read payload patterns from database
+    import json
+    payload_file_path = '/home/ubuntu1604/Desktop/logic_bug/learn_model/packets/manual_dataset_1709359674/SAU1CWRU2/payload_pattern.json'
+    with open(payload_file_path, "r") as payload_file:
+        payload_pattern_dict = json.load(payload_file)
+    payload_pattern_features = list(payload_pattern_dict.keys())  # split feature-> pattern
+    for feature_index in range(len(payload_pattern_features)):
+        payload_pattern_features[feature_index] = split_feature_str_to_pattern_list(payload_pattern_features[feature_index])
+
+    print(payload_pattern_features)
+
+    current_line_str = "smarthome.hicloud.com|443|http|POST|smarthome.hicloud.com|/smart-life/v3/home/gut9j9nkcp37t3puhqvjnf8/member/byaccount|||"
+    line_pattern_index = get_pattern_index_in_pattern_list(
+        pattern_matching(current_line_str, payload_pattern_features), payload_pattern_features)
+    print(line_pattern_index)
