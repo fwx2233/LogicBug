@@ -1048,14 +1048,29 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
         # set and sorted
         temp_feature_payload_combine_list = sorted(list(set(temp_feature_payload_combine_list)))
 
+        # check if it is the subset of existed classify result
+        for existed_classify_result_index in range(len(database_classify_result)):
+            existed_classify_result = database_classify_result[existed_classify_result_index]
+            break_flag = False
+            for line in temp_feature_payload_combine_list:
+                if line not in existed_classify_result:
+                    break_flag = True
+                    break
+            # if breaking, it is not subset
+            if break_flag:
+                continue
+
+            # it is the subset
+            mlog.log_func(mlog.LOG, "Subset of existed class")
+            return op_name + "_CLS_" + str(existed_classify_result_index)
+
+        mlog.log_func(mlog.LOG, "Not in existed class, find ew class!!")
         # add to classify result
         database_classify_result.append(temp_feature_payload_combine_list)
 
         # write to file
         with open(database_classify_file_path, "w") as classify_file:
             classify_file.write(json.dumps(database_classify_result, indent=4))
-
-        mlog.log_func(mlog.LOG, "New class!!")
 
         # return classify result
         return op_name + "_CLS_" + str(len(database_classify_result) - 1)
