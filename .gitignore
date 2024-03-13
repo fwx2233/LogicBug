@@ -1,5 +1,4 @@
 design/
-learn_model/models/
 learn_model/packets/
 learn_model/bert-base-uncased/
 learn_model/learnlib_module/.idea/
@@ -7,8 +6,6 @@ learn_model/learnlib_module/result/
 learn_model/learnlib_module/target/
 learn_model/*.json
 learn_model/*.txt
-
-#config/
 
 apks/
 
