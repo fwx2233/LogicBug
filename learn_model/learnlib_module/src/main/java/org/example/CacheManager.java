@@ -148,7 +148,7 @@ public class CacheManager {
             System.out.println("index: " + index);
 
             if (result == null)
-                return "Wrong";
+                return "Wrong_null";
         } while (result.startsWith("Reset"));
         System.out.println("result: " + result);
         if (result.startsWith(symbol)) {

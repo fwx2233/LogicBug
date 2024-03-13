@@ -114,7 +114,6 @@ public class Learner {
         while (!stop) {
             try {
                 LogManager.logger.logEvent("-----------------------------------------------------------------------------------");
-
                 LogManager.logger.logEvent("Start Learning");
 
                 SimpleProfiler.start("Total time");
@@ -222,8 +221,12 @@ public class Learner {
                     network.closeConnection();
                 }
             } catch (IllegalMonitorStateException | IndexOutOfBoundsException e) {
+                if (sul.isNull)
+                    return;
                 LogManager.logger.logPhase("Restart for RestartException");
-                cache.reloadCache();
+                if (!sul.isReset) {
+                    cache.reloadCache();
+                }
                 reLearn();
                 cache.index = 1;
             }

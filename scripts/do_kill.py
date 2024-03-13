@@ -1,4 +1,4 @@
-import subprocess, signal
+import subprocess
 import os
 
 admin_password = "admin"

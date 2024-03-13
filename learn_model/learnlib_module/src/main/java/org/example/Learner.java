@@ -114,7 +114,6 @@ public class Learner {
         while (!stop) {
             try {
                 LogManager.logger.logEvent("-----------------------------------------------------------------------------------");
-
                 LogManager.logger.logEvent("Start Learning");
 
                 SimpleProfiler.start("Total time");
@@ -221,8 +220,20 @@ public class Learner {
                     LogManager.logger.logPhase("The same nondeterministic query is generated too many times");
                     network.closeConnection();
                 }
-            } catch (IllegalMonitorStateException e) {
-                LogManager.logger.logPhase("Restart for IllegalMonitorStateException");
+            } catch (IllegalMonitorStateException | IndexOutOfBoundsException e) {
+                if (sul.isNull)
+                    return;
+                LogManager.logger.logPhase("Restart for RestartException");
+                if (!sul.isReset) {
+                    cache.reloadCache();
+                }
+                reLearn();
+                cache.index = 1;
+                if (queryNum == cache.index) {
+                    restartNum++;
+                }
+                if (restartNum>3)
+                    stop = true;
             }
         }
     }
