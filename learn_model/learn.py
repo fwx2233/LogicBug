@@ -8,6 +8,7 @@ import time
 import socket
 
 from learn_model.device import DeviceCls
+from learn_model.mitm_network import MitmCLs
 from learn_model import format_tools
 from log import mlog
 from config import button_constrain
@@ -163,39 +164,6 @@ class LearnCls:
             return "closeConnect"
 
 
-def read_log_and_gen_response_list(log_file_path):
-    if not os.path.exists(log_file_path):
-        return None
-
-    return_list = []
-
-    # read file
-    with open(log_file_path, "r") as log_file_handle:
-        lines = log_file_handle.readlines()
-
-        last_reset_index = -1
-        req_resp_tuple = ["", ""]
-        for line in lines:
-            if "Receive learnlib message" in line:
-                req_resp_tuple[0] = line.split()[-1].replace("\n", "")
-                if req_resp_tuple[0] == "Reset":
-                    last_reset_index = len(return_list)
-            elif "Receive query message" in line:
-                req_resp_tuple[0] = line.split()[-1].replace("\n", "")
-            elif "Send reply message" in line:
-                req_resp_tuple[1] = line.split()[-1].replace("\n", "")
-                if req_resp_tuple[0] != "":
-                    return_list.append(req_resp_tuple)
-                else:
-                    mlog.log_func(mlog.ERROR, "Extracting log failed, please check operation order")
-                    mlog.log_func(mlog.ERROR, "Start learning without help from log...")
-                    return None
-                req_resp_tuple = ["", ""]
-            else:
-                continue
-
-    return return_list[:last_reset_index]
-
 # def auto_learn_to_create_dataset(scan_result_name):
 #     # create an entity of learn
 #     learn_entity = DeviceCls(scan_result_name, "nexus")
@@ -218,53 +186,6 @@ def read_log_and_gen_response_list(log_file_path):
 #     learn_entity.stop_tshark()
 #     learn_entity.stop_frida_hook()
 #     learn_entity.stop_driver()
-
-
-def manual_learn_to_create_dataset(scan_result_name, database):
-    mlog.log_func(mlog.LOG, "Manual test start")
-
-    # create an entity of learn and start driver
-    pixel_entity = DeviceCls(scan_result_name, "pixel7", "user1", frida_flag=True)
-    pixel_entity.start_driver_and_init()
-    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", frida_flag=False)
-    nexus_entity.start_driver_and_init()
-
-    # start tshark
-    pixel_entity.start_tshark("manual_dataset")
-
-    test_order_list = ["SAU1CWRU2", "DCU1", "USU1CWRU2"]# , "ADU1CWR", "DCU1", "SAU1CWRU2", "DCU1", "USU1CWRU2", "RDU1CWR", "ADU1CWR", "RDU1CWR"]
-    # test_order_list = ["SAU1CWRU2"]
-    mlog.log_func(mlog.LOG, "test order")
-    mlog.log_list_func(mlog.LOG, test_order_list)
-
-    for count in range(1):
-        for cur_op_name in test_order_list:
-            pixel_entity.back_to_home()
-            time_list = pixel_entity.click_and_save(cur_op_name, waiting_time=3)
-
-            if time_list:
-                mlog.log_func(mlog.LOG, pixel_entity.parse_packet_and_get_response(database, pixel_entity.cur_packet_name,
-                                                       cur_op_name, time_list[0], time_list[1]))
-            else:
-                # can not tap
-                mlog.log_func(mlog.ERROR, f"Option: {cur_op_name} can't tap")
-                mlog.log_func(mlog.LOG, "NoElement")
-
-            if cur_op_name == "SAU1CWRU2":
-                mlog.log_func(mlog.DEBUG, "Current operation is <SA>, waiting for user2 agree")
-                nexus_entity.back_to_home()
-                nexus_entity.click_button("AcceptInvite")
-
-    # back to homepage
-    pixel_entity.back_to_home()
-    nexus_entity.back_to_home()
-
-    # stop packet capture, close android driver
-    pixel_entity.stop_learn()
-
-    # stop driver
-    pixel_entity.stop_driver()
-    nexus_entity.stop_driver()
 
 
 def learn_model_main(scan_result_name, database, learn_dir_name="learnlib_learn"):
@@ -423,8 +344,86 @@ def learn_model_main(scan_result_name, database, learn_dir_name="learnlib_learn"
     mlog.log_func(mlog.LOG, "Learn finish")
 
 
+def manual_create_database_for_double_wifi(scan_result_name, database_name="double_wifi_dataset"):
+    mlog.log_func(mlog.LOG, "Manual test start")
+
+    # create an entity of learn and start driver
+    pixel_entity = DeviceCls(scan_result_name, "pixel7", "user1", "local", frida_flag=True)
+    pixel_entity.start_driver_and_init()
+    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", "remote", frida_flag=True)
+    nexus_entity.start_driver_and_init()
+    phone_entity_dict = {
+        pixel_entity.USER: pixel_entity,
+        nexus_entity.USER: nexus_entity
+    }
+    distance_phone_dict = {
+        "local": [pixel_entity],
+        "remote": [nexus_entity]
+    }
+
+    # init mitm entity
+    local_mitm_entity = MitmCLs("local")
+    remote_mitm_entity = MitmCLs("remote")
+    mitm_entity_list = [
+        local_mitm_entity,
+        remote_mitm_entity
+    ]
+
+    # start mitm
+    start_count = 0
+    for entity in mitm_entity_list:
+        entity.start_mitm_main(not start_count)
+        start_count += 1
+
+    # start tshark -- capture
+    for entity in mitm_entity_list:
+        capture_file_name = entity.start_tshark(f"{database_name}_{entity.distance}")
+        # set name
+        for phone in distance_phone_dict[entity.distance]:
+            phone.set_packet_name(capture_file_name)
+
+    time.sleep(5)
+
+    test_order_list = ["user1|InviteToHome", "user2|AcceptInvite", "user1|RemoveFromHome"]#,
+                       # "user1|InviteToHome", "user2|DenyInvite",
+                       # "user1|AddDevice", "user1|DeviceControl", "user1|InviteToHome", "user2|AcceptInvite",
+                       # "user1|DeviceControl", "user1|RemoveFromHome", "user1|DeviceControl", "user1|RemoveDevice"]
+    mlog.log_func(mlog.LOG, "Test click order")
+    mlog.log_list_func(mlog.LOG, test_order_list)
+
+    error_flag = False
+    for count in range(1):
+        if error_flag:
+            break
+        # test count
+        for operation_full_name in test_order_list:
+            cur_user = operation_full_name.split("|")[0]
+            cur_op = operation_full_name.split("|")[-1]
+
+            # back to home
+            if not phone_entity_dict[cur_user].back_to_home():
+                error_flag = True
+                break
+
+            # click and save file
+            phone_entity_dict[cur_user].click_and_save(cur_op)
+
+    # create database finish
+    mlog.log_func(mlog.LOG, "Create database finish")
+    # stop mitm and tshark
+    for mitm in mitm_entity_list:
+        mitm.stop_mitm_and_clear_iptables(f"{distance_phone_dict[mitm.distance][0].cur_packet_folder}/{distance_phone_dict[mitm.distance][0].cur_packet_name.split('.')[0]}.txt")
+        mitm.stop_tshark()
+
+    # stop frida hook, driver, appium server
+    for phone in phone_entity_dict.values():
+        phone.stop_frida_hook()
+        phone.stop_driver_and_appium_server()
+
+
 if __name__ == "__main__":
     mlog.clear_log()
 
     # manual_learn_to_create_dataset("20230920183445_com.huawei.smarthome", "manual_dataset_1709359674")
-    learn_model_main("20230920183445_com.huawei.smarthome", "manual_dataset_1709359674")
+    # learn_model_main("20230920183445_com.huawei.smarthome", "manual_dataset_1709359674")
+    manual_create_database_for_double_wifi("20230920183445_com.huawei.smarthome")

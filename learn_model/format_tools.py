@@ -130,6 +130,9 @@ def get_wireshark_filter_by_timestamp(start_timestamp, end_timestamp):
     :return: wireshark filter expression or None(if the input is wrong)
     """
     # check if end_timestamp is larger than or equal to start_timestamp
+    start_timestamp = float(start_timestamp)
+    end_timestamp = float(end_timestamp)
+
     if end_timestamp < start_timestamp:
         mlog.log_func(mlog.ERROR, "Please check your input, end_timestamp should be larger than or equal to start_timestamp")
         mlog.log_func(mlog.ERROR, f"Your input: start_timestamp={start_timestamp}, end_timestamp={end_timestamp}")
@@ -182,11 +185,6 @@ def get_domain_by_ip(ip, domain_mapping_list):
         return ip
     mlog.log_func(mlog.ERROR, "dns mapping type error(not list and not dict)")
     exit(-3)
-    # try:
-    #     target_domain = socket.gethostbyaddr(ip)[0]
-    #     return "compute." + target_domain.split("compute.")[-1]
-    # except socket.herror:
-    #     return ip
 
 
 """
@@ -433,10 +431,6 @@ def get_pattern_index_in_pattern_list(pattern, pattern_list):
         return -1
 
 
-def show_pattern(patterns):
-    pass
-
-
 def split_feature_str_to_pattern_list(feature_str, abs_re = r"Abs_Len\d{1,}\|"):
     """
 
@@ -534,19 +528,7 @@ def get_udp_payload_pattern(cases):
     # print(temp_patterns)
     return temp_patterns
 
+
 if __name__ == "__main__":
     # read payload patterns from database
-    import json
-    payload_file_path = '/home/ubuntu1604/Desktop/logic_bug/learn_model/packets/manual_dataset_1709359674/SAU1CWRU2/payload_pattern.json'
-    with open(payload_file_path, "r") as payload_file:
-        payload_pattern_dict = json.load(payload_file)
-    payload_pattern_features = list(payload_pattern_dict.keys())  # split feature-> pattern
-    for feature_index in range(len(payload_pattern_features)):
-        payload_pattern_features[feature_index] = split_feature_str_to_pattern_list(payload_pattern_features[feature_index])
-
-    print(payload_pattern_features)
-
-    current_line_str = "smarthome.hicloud.com|443|http|POST|smarthome.hicloud.com|/smart-life/v3/home/gut9j9nkcp37t3puhqvjnf8/member/byaccount|||"
-    line_pattern_index = get_pattern_index_in_pattern_list(
-        pattern_matching(current_line_str, payload_pattern_features), payload_pattern_features)
-    print(line_pattern_index)
+    print(get_wireshark_filter_by_timestamp(1710325796.775498, 1710325806.0281956))

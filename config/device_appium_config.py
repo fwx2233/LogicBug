@@ -1,6 +1,6 @@
 appium_path = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
 
-device_configs = {
+phone_configs = {
     "nexus": {
         # owner---local control and add device
         "platformName": "Android",
@@ -13,11 +13,11 @@ device_configs = {
         'newCommandTimeout': "600",
         "additionalMess": {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
-            "wirelessCard": "wlxc01c30151c62",
+            "wirelessCard": "wlxc01c302ff1cf",
             "port": 4723,
             "appium_ip": "http://127.0.0.1:4723/wd/hub",
             "phone_ip": "10.42.1.15",
-            "identity": "guest"
+            "distance": "remote"
         }
     },
     "pixel7": {
@@ -36,17 +36,21 @@ device_configs = {
             "port": 4724,
             "appium_ip": "http://127.0.0.1:4724/wd/hub",
             "phone_ip": "10.42.0.230",
-            "identity": "host"
+            "distance": "local"
         }
     }
 }
 
+device_ip_list = [
+    "10.42.0."
+]
 
-def get_device_config_by_name(device_name):
-    if device_name in device_configs:
-        return device_configs[device_name]
+
+def get_phone_config_by_name(device_name):
+    if device_name in phone_configs:
+        return phone_configs[device_name]
     return False
 
 
-def get_device_list():
-    return list(device_configs.keys())
+def get_phone_list():
+    return list(phone_configs.keys())

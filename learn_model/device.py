@@ -13,7 +13,7 @@ from config import device_appium_config
 
 
 class DeviceCls:
-    def __init__(self, scan_folder_name, device_name, which_user, frida_flag=True):
+    def __init__(self, scan_folder_name, device_name, which_user, distance, frida_flag=True):
         mlog.log_func(mlog.LOG, f"Current device: <{device_name}>, regarded as user: <{which_user}>")
 
         # paths
@@ -29,13 +29,14 @@ class DeviceCls:
         self.APPIUM_PATH = device_appium_config.appium_path
 
         # get config of device
-        self.DEVICE_CONFIG_DICT = device_appium_config.get_device_config_by_name(device_name)
+        self.DEVICE_CONFIG_DICT = device_appium_config.get_phone_config_by_name(device_name)
         if not self.DEVICE_CONFIG_DICT:
             mlog.log_func(mlog.ERROR, "Do not have device_name: " + device_name + ". Please check your input.")
-            print("Device_name list: ", device_appium_config.get_device_list())
+            print("Device_name list: ", device_appium_config.get_phone_list())
             exit(10)
 
         self.USER = which_user
+        self.DISTANCE = distance
         self.APK_NAME = self.DEVICE_CONFIG_DICT["appPackage"]
         self.APPIUM_IP = self.DEVICE_CONFIG_DICT["additionalMess"]["appium_ip"]
         self.APPIUM_PORT = self.DEVICE_CONFIG_DICT["additionalMess"]["port"]
@@ -59,9 +60,10 @@ class DeviceCls:
         time.sleep(2)
 
         if frida_flag:
-            # self.modify_frida_script()
+            self._write_frida_hook_bash()
             if not self.check_frida_server():
                 mlog.log_func(mlog.ERROR, "frida server is not start, please check and restart")
+                self.stop_appium_server()
                 exit(10)
             self.start_frida_hook()
             time.sleep(5)
@@ -97,88 +99,18 @@ class DeviceCls:
             os.remove(fine_name)
             return False
 
-    def start_tshark(self, pcapng_name):
-        # admin_proc
-        admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
-
-        self.cur_packet_name = pcapng_name + '_' + str(int(time.time())) + ".pcapng"
-
-        # create folder
-        self.cur_packet_folder = self.PACKET_ROOT_PATH + self.cur_packet_name[:-7] + "/"
-        if not os.path.exists(self.cur_packet_folder):
-            os.makedirs(self.cur_packet_folder)
-
-        self.cur_packet_path = self.cur_packet_folder + self.cur_packet_name
-
-        mlog.log_func(mlog.LOG, "Start capturing, save in file: " + self.PACKET_ROOT_PATH + self.cur_packet_name)
-        with open(self.LOG_FOLDER_PATH + "tshark_log_file.txt", "w") as log_file:
-            pass
-        a = subprocess.Popen(["tshark", "-i", self.WIRELESS_CARD, "-w", self.cur_packet_path], stdout=open(self.LOG_FOLDER_PATH + "tshark_log_file.txt", "w"))
-
-        admin_proc.kill()
-
-    def stop_tshark(self, with_error=0):
-        admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
-        # stop tshark and chmod
-        self.kill_tshark()
-
-        # # rename sslkeyfile
-        # os.rename(self.PACKET_ROOT_PATH + 'sslkeylogfile.txt',
-        #           self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt")
-        #
-        # # move file to it's corresponding folder
-        # shutil.move(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + ".txt", self.cur_packet_folder)
-        #
-        # # remove file
-        # os.remove(self.LOG_FOLDER_PATH + "tshark_log_file.txt")
-
-        admin_proc.kill()
-
-    # def kill_mitm(self):
-    #     mlog.log_func(mlog.LOG, "kill mitm and clear iptable rules")
-    #
-    #     # get process id
-    #     file_name = self.ROOT_PATH + "/1.txt"
-    #     command = "ps aux|grep mitmdump > " + file_name
-    #     os.system(command)
-    #
-    #     # parse id and kill mitm process
-    #     if os.path.exists(file_name):
-    #         with open(file_name, "r") as f:
-    #             lines = f.readlines()
-    #             if lines:
-    #                 process_id = lines[0].split()[1]
-    #                 command = "kill -9 " + process_id
-    #                 os.system('echo %s | sudo -S %s' % (self.admin_password, command))
-    #         os.remove(file_name)
-    #
-    #     # remove log
-    #     if os.path.exists(self.LOG_FOLDER_PATH + "mitm_log.txt"):
-    #         os.remove(self.LOG_FOLDER_PATH + "mitm_log.txt")
-
-    def kill_tshark(self):
-        mlog.log_func(mlog.LOG, "kill tshark")
-
-        fine_name = self.SCRIPTS_FOLDER + "temp_tshark_ps"
-        command = "ps -aux|grep tshark > " + fine_name
-        os.system(command)
-
-        with open(fine_name, "r") as f:
-            lines = f.readlines()
-        if len(lines) > 1:
-            # admin_proc = subprocess.Popen(["echo", self.admin_password], stdout=subprocess.PIPE)
-            for lin in lines[:-2]:
-                porc_id = lin.split()[1]
-                command = "kill -9 " + porc_id
-                # temp_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout)
-                os.system('echo %s | sudo -S %s' % (self.admin_password, command))
-            # admin_proc.kill()
-        os.remove(fine_name)
+    def _write_frida_hook_bash(self):
+        with open(f"{self.SCRIPTS_FOLDER}/start_pinning_frida_script_{self.DEVICE_NAME}.bash", "w") as sc_file:
+            sc_file.write("#!/bin/bash\n")
+            sc_file.write(f'target_app="{self.APK_NAME}"\n')
+            sc_file.write(f'select_device="{self.UDID}"\n')
+            sc_file.write(f'script_path="{self.SCRIPTS_FOLDER}pinning_disable.js"\n')
+            sc_file.write("frida -D $select_device -F $target_app -l $script_path")
 
     def start_frida_hook(self):
         mlog.log_func(mlog.LOG, "Start frida to ban the SSL Pinning")
         # start disable ssl pinning
-        command = "bash " + self.SCRIPTS_FOLDER + f"start_pinning_frida_script_{self.DEVICE_CONFIG_DICT['additionalMess']['identity']}.bash"
+        command = "bash " + self.SCRIPTS_FOLDER + f"start_pinning_frida_script_{self.DEVICE_NAME}.bash"
         sslpin_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stdin=open("/dev/null"))
 
     def stop_frida_hook(self):
@@ -213,12 +145,12 @@ class DeviceCls:
             if os.path.exists(self.LOG_FOLDER_PATH + self.UDID + "_appium_log.txt"):
                 os.remove(self.LOG_FOLDER_PATH + self.UDID + "_appium_log.txt")
         except ProcessLookupError:
-            mlog.log_func(mlog.ERROR, "ProcessLookupError from kill appium server")
+            mlog.log_func(mlog.ERROR, "ProcessLookupError from device.stop_appium_server")
 
-    def parse_packet_and_get_response(self, database, packet_name, op_name, start_time, end_time) -> str:
-        cur_key_log_file_path = f'{self.PACKET_ROOT_PATH}/sslkeylogfile_{self.DEVICE_CONFIG_DICT["additionalMess"]["identity"]}.txt'
-        return packet_parser.get_new_op_class_for_response(database, packet_name, cur_key_log_file_path, op_name,
-                                                           start_time, end_time)
+    # def parse_packet_and_get_response(self, database, packet_name, op_name, start_time, end_time) -> str:
+    #     cur_key_log_file_path = f'{self.PACKET_ROOT_PATH}/sslkeylogfile_{self.DEVICE_CONFIG_DICT["additionalMess"]["identity"]}.txt'
+    #     return packet_parser.get_new_op_class_for_response(database, packet_name, cur_key_log_file_path, op_name,
+    #                                                        start_time, end_time)
 
     def start_driver(self):
         """
@@ -238,17 +170,10 @@ class DeviceCls:
             # self.stop_and_restart_app()
             pass
 
-    def stop_driver(self):
+    def stop_driver_and_appium_server(self):
         mlog.log_func(mlog.LOG, f"Driver <{self.DEVICE_NAME}> quit")
         self.driver.quit()
         self.stop_appium_server()
-
-    def stop_learn(self):
-        mlog.log_func(mlog.LOG, "Stop Learning...")
-        # stop packet capture, close android driver
-        self.stop_tshark()
-        # stop hook
-        self.stop_frida_hook()
 
     def stop_and_restart_app(self):
         mlog.log_func(mlog.LOG, f"Device <{self.DEVICE_NAME}> stop and restart APP <{self.APK_NAME}>")
@@ -266,7 +191,7 @@ class DeviceCls:
 
             # something wrong with frida or appium or app
             if back_count > 10:
-                mlog.log_func(mlog.ERROR, "Something wrong with frida or appium or app, please [restart app and restart learn]")
+                mlog.log_func(mlog.ERROR, "Something wrong with frida or appium or app, can not back to home, please [restart app and restart learn]")
 
                 # restart app
                 self.stop_and_restart_app()
@@ -297,10 +222,10 @@ class DeviceCls:
             time.sleep(waiting_time)
             end_time = time.time()
             # save log
-            action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[
-                0] + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
-            if not os.path.exists(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + ui_name + "/"):
-                os.makedirs(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + ui_name + "/")
+            action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
+            if not os.path.exists(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/"):
+                os.makedirs(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/")
+
             with open(action_log_file, "w") as log:
                 log.write(self.cur_packet_name)
                 log.write('\n')
@@ -408,27 +333,12 @@ class DeviceCls:
 
         return True
 
+    def set_packet_name(self, pcap_name):
+        self.cur_packet_name = pcap_name
+        self.cur_packet_folder = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/"
+        self.cur_packet_path = self.cur_packet_folder + pcap_name
+
 
 if __name__ == "__main__":
-    from learn_model.mitm_network import MitmCLs
-    host_mitm_entity = MitmCLs("host")
-    host_mitm_entity.start_mitm_main()
-
     pixel7_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel7", "user1", frida_flag=True)
-    pixel7_entity.start_driver_and_init()
-    pixel7_entity.start_tshark("test_case")
-
-    option = "USU1CWRU2"
-
-    time_list = pixel7_entity.click_and_save(option)
-    if time_list:
-        print(pixel7_entity.parse_packet_and_get_response("manual_dataset_1709359674", pixel7_entity.cur_packet_name, option, time_list[0], time_list[1]))
-
-    pixel7_entity.stop_learn()
-    host_mitm_entity.stop_mitm_and_clear_iptables()
-    pixel7_entity.stop_driver()
-
-    # nexus_entity = DeviceCls("20230920183445_com.huawei.smarthome", "nexus", "user2", frida_flag=False)
-    # nexus_entity.start_driver_and_init()
-    # nexus_entity.click_button("AcceptInvite")
-    # nexus_entity.stop_driver()
+    print(pixel7_entity.check_frida_server())
