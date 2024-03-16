@@ -353,12 +353,14 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
     nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", "remote", frida_flag=True)
     nexus_entity.start_driver_and_init()
     phone_entity_dict = {
-        pixel_entity.USER: pixel_entity,
-        nexus_entity.USER: nexus_entity
-    }
-    distance_phone_dict = {
-        "local": [pixel_entity],
-        "remote": [nexus_entity]
+        "user1": {
+            "local": pixel_entity,
+            "remote": None
+        },
+        "user2": {
+            "local": None,
+            "remote": nexus_entity
+        }
     }
 
     # init mitm entity
@@ -377,48 +379,52 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
 
     # start tshark -- capture
     for entity in mitm_entity_list:
-        capture_file_name = entity.start_tshark(f"{database_name}_{entity.distance}")
+        capture_file_name = entity.start_tshark(f"{database_name}")
         # set name
-        for phone in distance_phone_dict[entity.distance]:
-            phone.set_packet_name(capture_file_name)
+        for dis_phone in phone_entity_dict.values():
+            if dis_phone[entity.distance]:
+                dis_phone[entity.distance].set_packet_name(capture_file_name)
 
     time.sleep(5)
+    test_order_list = ["user1|local|InviteToHome", "user2|remote|AcceptInvite", "user1|local|RemoveFromHome",
+                       "user1|local|AddDevice", "user1|local|DeviceControl", "user1|local|InviteToHome", "user2|remote|AcceptInvite", "user1|local|DeviceControl",
+                       "user1|local|RemoveDevice", "user1|local|InviteToHome", "user1|local|AddDevice",
+                       "user1|local|RemoveFromHome", "user1|local|RemoveDevice",
+                       "user1|local|InviteToHome", "user2|remote|DenyInvite"]
 
-    test_order_list = ["user1|InviteToHome", "user2|AcceptInvite", "user1|RemoveFromHome"]#,
-                       # "user1|InviteToHome", "user2|DenyInvite",
-                       # "user1|AddDevice", "user1|DeviceControl", "user1|InviteToHome", "user2|AcceptInvite",
-                       # "user1|DeviceControl", "user1|RemoveFromHome", "user1|DeviceControl", "user1|RemoveDevice"]
     mlog.log_func(mlog.LOG, "Test click order")
     mlog.log_list_func(mlog.LOG, test_order_list)
 
     error_flag = False
-    for count in range(1):
+    for count in range(2):
         if error_flag:
             break
         # test count
         for operation_full_name in test_order_list:
             cur_user = operation_full_name.split("|")[0]
-            cur_op = operation_full_name.split("|")[-1]
+            cur_distance = operation_full_name.split("|")[1]
 
             # back to home
-            if not phone_entity_dict[cur_user].back_to_home():
+            if not phone_entity_dict[cur_user][cur_distance].back_to_home():
                 error_flag = True
                 break
 
             # click and save file
-            phone_entity_dict[cur_user].click_and_save(cur_op)
+            phone_entity_dict[cur_user][cur_distance].click_and_save(operation_full_name)
 
     # create database finish
     mlog.log_func(mlog.LOG, "Create database finish")
     # stop mitm and tshark
     for mitm in mitm_entity_list:
-        mitm.stop_mitm_and_clear_iptables(f"{distance_phone_dict[mitm.distance][0].cur_packet_folder}/{distance_phone_dict[mitm.distance][0].cur_packet_name.split('.')[0]}.txt")
+        mitm.stop_mitm_and_clear_iptables(f"{mitm.cur_packet_folder}/{mitm.cur_packet_name.split('.')[0]}.txt")
         mitm.stop_tshark()
 
     # stop frida hook, driver, appium server
-    for phone in phone_entity_dict.values():
-        phone.stop_frida_hook()
-        phone.stop_driver_and_appium_server()
+    for distance_phone_dict in phone_entity_dict.values():
+        for phone in distance_phone_dict.values():
+            if phone:
+                phone.stop_frida_hook()
+                phone.stop_driver_and_appium_server()
 
 
 if __name__ == "__main__":

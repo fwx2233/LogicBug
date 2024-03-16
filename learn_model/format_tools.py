@@ -9,26 +9,17 @@ import sys
 sys.setrecursionlimit(3000)
 
 
-def filter_some_strings_by_re(string):
-    patterns = [r'\d{10}(?!\d)',
-                r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}',
-                r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d{3}',
-                r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z',
-                r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z',
-                r'\d{4}-\d{2}-\d{2}',
-                r'\d{2}/\d{2}/\d{4}',
-                r'\d{2}-\d{2}-\d{4}',
-                r'\d{2}\.\d{2}\.\d{4}',
-                r'\d{4}/\d{2}/\d{2}',
-                r'\d{8}T\d{6,}Z'
-                ]
-    for pattern in patterns:
-        if re.search(pattern, string, re.IGNORECASE):
-            return True
-    return False
+"""
+tools of http header
+"""
 
 
 def remove_string_by_some_pattern(input_string):
+    """
+    Use regular expression to match string and modify the substring to abstract string if matching
+    :param input_string: string under matching
+    :return : string after modified
+    """
     def modify_by_pattern(pattern, string_under_modify):
         match = re.search(pattern, string_under_modify)
         if not match:
@@ -85,15 +76,21 @@ def remove_blank_str(result_str, split_char):
 
 
 def simply_format_header_feature(header_str: str):
+    """
+    Use it to keep uri(before "?")
+    :param header_str: http uri, such as /a/b/c?d=4
+    :return : uri before "?", such as /a/b/c
+    """
     # keep the part before the "?"
     header_str = header_str.split("?")[0]
     return header_str
 
 
-# continue
 """
 sort tools
 """
+
+
 def sort_dict_by_key(dictionary):
     sorted_dict = dict(sorted(dictionary.items(), key=lambda x: x[0]))
     return sorted_dict
@@ -187,6 +184,24 @@ def get_domain_by_ip(ip, domain_mapping_list):
     exit(-3)
 
 
+def generate_selected_expression_by_ip_list(ip_list):
+    """
+    Use ip from ip_list to generate filter expression
+    :param ip_list: selected ip
+    :return : expression of wireshark
+    """
+    return_expression = "("
+    for index in range(len(ip_list)):
+        ip = ip_list[index]
+        return_expression += f"ip.addr == {ip}"
+        if index == len(ip_list) - 1:
+            break
+        return_expression += " or "
+    return_expression += ")"
+
+    return return_expression
+
+
 """
 Template extraction based on randomness assessment
 """
@@ -197,16 +212,6 @@ def get_suffix_by_prefix(cur_prefix, separator_list, value_list, pattern_list):
         """
         get next value_fp_list for current prefix
         """
-        # for index in range(len(separator_list)):
-        #     if separator_list[index] == "":
-        #         continue
-        #     if separator_list[index] not in cur_prefix:
-        #         break
-        #
-        # if separator_list[0] == "":
-        #     return value_list[index]
-        # else:
-        #     return value_list[index - 1]
         if int(len(cur_prefix) / 2) < len(value_list):
             return value_list[int(len(cur_prefix) / 2)]
         else:
@@ -362,8 +367,8 @@ def get_patterns_for_feature_payload_list(payload_list_for_cur_feature: list, is
 
     return pattern_list
 
+
 """
-============================================================================
     Use pattern to match
 """
 
@@ -391,11 +396,15 @@ def get_regular_expression_from_pattern(pattern_split: list):
     return regular_expression
 
 
-def pattern_matching(case, patterns, is_udp=False):
+def pattern_matching(case, patterns, is_hex=False):
     """
-
+    Use patterns to match case. If matching, return pattern. If not, return None
+    :param case: case under matching
+    :param patterns: patterns
+    :param is_hex: If case is hex data, check whether hex string is printable charactor
+    :return : If matching, return pattern, else, return None
     """
-    if is_udp:
+    if is_hex:
         raw_case = case
         try:
             case_split = case.split(":")
@@ -455,19 +464,19 @@ def split_feature_str_to_pattern_list(feature_str, abs_re = r"Abs_Len\d{1,}\|"):
 
 def get_udp_payload_pattern(cases):
     # get readable char list
-    is_readalbe_char_list = [1] * len(cases[0].split(":"))
+    is_readable_char_list = [1] * len(cases[0].split(":"))
 
-    for index in range(len(is_readalbe_char_list)):
+    for index in range(len(is_readable_char_list)):
         for item in cases:
             if not ("7E" >= item.split(":")[index] >= "20"):
-                is_readalbe_char_list[index] = 0
+                is_readable_char_list[index] = 0
                 break
 
     zero_count = 0
     one_count = 0
     udp_payload_pattern_by_readable_list = []
-    for index in range(len(is_readalbe_char_list)):
-        if is_readalbe_char_list[index]:
+    for index in range(len(is_readable_char_list)):
+        if is_readable_char_list[index]:
             if zero_count:
                 udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
                 zero_count = 0
@@ -532,3 +541,4 @@ def get_udp_payload_pattern(cases):
 if __name__ == "__main__":
     # read payload patterns from database
     print(get_wireshark_filter_by_timestamp(1710325796.775498, 1710325806.0281956))
+    print(generate_selected_expression_by_ip_list(["10.42.0.185", "10.42.1.15"]))

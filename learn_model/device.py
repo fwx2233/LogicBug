@@ -52,8 +52,8 @@ class DeviceCls:
             if key != "additionalMess":
                 self.DEVICE_CONFIG_DICT_FOR_APPIUM[key] = self.DEVICE_CONFIG_DICT[key]
 
-        # get valuable_buttion_dict
-        self.val_but_dict = self.get_valuable_button(self.VALUABLE_BUTTON_FILE, self.USER)
+        # get valuable_button_dict
+        self.val_but_dict = self.get_valuable_button()
 
         # start appium for listen
         self.start_appium_server(self.APPIUM_PATH)
@@ -75,15 +75,19 @@ class DeviceCls:
         self.cur_packet_folder = ""
         self.cur_packet_path = ""
 
-    def get_valuable_button(self, button_conf_file, user) -> dict:
-        with open(button_conf_file, "r") as f:
+    def get_valuable_button(self) -> dict:
+        with open(self.VALUABLE_BUTTON_FILE, "r") as f:
             valuable_button_click_path = json.load(f)
 
-        if user not in valuable_button_click_path:
-            mlog.log_func(mlog.ERROR, f"{user} is not in valuable_buttion.json")
+        if self.USER not in valuable_button_click_path:
+            mlog.log_func(mlog.ERROR, f"{self.USER} is not in valuable_buttion.json")
             exit(-2)
 
-        return valuable_button_click_path[user]
+        result = dict()
+        result[self.DISTANCE] = valuable_button_click_path[self.USER][self.DISTANCE]
+        result["Special"] = valuable_button_click_path[self.USER]["Special"]
+
+        return result
 
     def check_frida_server(self):
         fine_name = self.LOG_FOLDER_PATH + "temp_frida_ps"
@@ -202,7 +206,7 @@ class DeviceCls:
                 return False
 
         # back to home page
-        while not self.click_button("BackHome"):
+        while not self.click_button("|BackHome"):
             mlog.log_func(mlog.LOG, "Press back-system")
             self.driver.back()
             time.sleep(0.5)
@@ -216,15 +220,17 @@ class DeviceCls:
         :param waiting_time:
         :return:
         """
-        mlog.log_func(mlog.LOG, f"<{self.USER}> Click task-----{ui_name}")
+        mlog.log_func(mlog.LOG, f"Click task-----<{ui_name}>")
         start_time = time.time()
         if self.click_button(ui_name):
             time.sleep(waiting_time)
             end_time = time.time()
             # save log
-            action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
-            if not os.path.exists(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/"):
-                os.makedirs(self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/")
+            # action_log_file = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/" + self.USER + "/" + ui_name + "/" + ui_name + '_' + str(int(start_time)) + ".txt"
+            action_log_folder = self.cur_packet_folder + self.USER + "/" + ui_name.split("|")[-1] + "/"
+            action_log_file = action_log_folder + ui_name + '_' + str(int(start_time)) + ".txt"
+            if not os.path.exists(action_log_folder):
+                os.makedirs(action_log_folder)
 
             with open(action_log_file, "w") as log:
                 log.write(self.cur_packet_name)
@@ -241,16 +247,20 @@ class DeviceCls:
         Click the button
         :param ui_name: action name will be clicked
         """
+        full_ui_name = ui_name
+        cur_distance = ui_name.split("|")[1]
+        ui_name = ui_name.split("|")[-1]
+
         is_special_op = False
         if ui_name in self.val_but_dict["Special"]:
             is_special_op = True
-        elif ui_name not in self.val_but_dict.keys():
-            mlog.log_func(mlog.ERROR, f"UI <{ui_name}> which will be clicked is not in config/valuable_button.json")
+        elif ui_name not in self.val_but_dict[cur_distance].keys():
+            mlog.log_func(mlog.ERROR, f"UI <{full_ui_name}> which will be clicked is not in config/valuable_button.json")
             return False
 
         # get click path
         if not is_special_op:
-            click_path_dict = self.val_but_dict[ui_name]
+            click_path_dict = self.val_but_dict[cur_distance][ui_name]
         else:
             click_path_dict = self.val_but_dict["Special"][ui_name]
 
@@ -263,7 +273,7 @@ class DeviceCls:
             if "description" in click_path_dict[index].keys():
                 mlog.log_func(mlog.LOG, index + "---" + click_path_dict[index]["description"], t_count=1)
             else:
-                mlog.log_func(mlog.LOG, index + "---" + ui_name + ": " + click_path_dict[index], t_count=1)
+                mlog.log_func(mlog.LOG, index + "---" + full_ui_name + ": " + click_path_dict[index], t_count=1)
 
             # get location and click
             if "xpath" in click_path_dict[index].keys():
@@ -335,7 +345,7 @@ class DeviceCls:
 
     def set_packet_name(self, pcap_name):
         self.cur_packet_name = pcap_name
-        self.cur_packet_folder = self.PACKET_ROOT_PATH + self.cur_packet_name.split(".")[0] + "/"
+        self.cur_packet_folder = self.PACKET_ROOT_PATH + "_".join(self.cur_packet_name.split("_")[:-1]) + "/" + self.cur_packet_name.split("_")[-1][:-7] + "/"
         self.cur_packet_path = self.cur_packet_folder + pcap_name
 
 

@@ -17,7 +17,8 @@ phone_configs = {
             "port": 4723,
             "appium_ip": "http://127.0.0.1:4723/wd/hub",
             "phone_ip": "10.42.1.15",
-            "distance": "remote"
+            "distance": "remote",
+            "user": "user2"
         }
     },
     "pixel7": {
@@ -36,13 +37,14 @@ phone_configs = {
             "port": 4724,
             "appium_ip": "http://127.0.0.1:4724/wd/hub",
             "phone_ip": "10.42.0.230",
-            "distance": "local"
+            "distance": "local",
+            "user": "user1"
         }
     }
 }
 
 device_ip_list = [
-    "10.42.0."
+    "10.42.0.185"
 ]
 
 
@@ -54,3 +56,24 @@ def get_phone_config_by_name(device_name):
 
 def get_phone_list():
     return list(phone_configs.keys())
+
+
+def get_phone_and_device_ip():
+    result_dict = {}
+    for phone in phone_configs:
+        ip = phone_configs[phone]["additionalMess"]["phone_ip"]
+        user = phone_configs[phone]["additionalMess"]["user"]
+        distance = phone_configs[phone]["additionalMess"]["distance"]
+
+        if user not in result_dict:
+            result_dict[user] = {}
+        result_dict[user][distance] = ip
+
+    # add device ip list
+    result_dict["devices"] = device_ip_list
+
+    return result_dict
+
+
+if __name__ == "__main__":
+    print(get_phone_and_device_ip())

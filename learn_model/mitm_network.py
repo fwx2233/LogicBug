@@ -16,7 +16,7 @@ class MitmCLs:
         self.CONF_FOLDER_PATH = self.ROOT_PATH + "/../config/"
         self.SCRIPTS_FOLDER = self.ROOT_PATH + "/../scripts/"
 
-        # other
+        # configure
         self._admin_password = "admin"
         self._distance_phone_dict = {}
         for phone, values in phone_configs.items():
@@ -26,6 +26,10 @@ class MitmCLs:
             exit(-1)
         self.distance = distance.lower()
         self._WIRELESS_CARD = phone_configs[self._distance_phone_dict[self.distance]]["additionalMess"]["wirelessCard"]
+
+        # packet captured by tshark
+        self.cur_packet_name = ""
+        self.cur_packet_folder = ""
 
         # write scripts
         self._write_change_ip_tables_script()
@@ -112,7 +116,7 @@ class MitmCLs:
 
         admin_proc = subprocess.Popen(["echo", self._admin_password], stdout=subprocess.PIPE)
         # get process id
-        file_name = self.LOG_FOLDER_PATH + "kell_mitm.txt"
+        file_name = self.LOG_FOLDER_PATH + "kill_mitm.txt"
         port = "8080" if self.distance == "local" else "8081"
         command = f"netstat -tunlp|grep {port} > {file_name}"
         # save_proc = subprocess.Popen(command.split(), stdin=admin_proc.stdout, stdout=subprocess.PIPE)
@@ -148,10 +152,11 @@ class MitmCLs:
         # admin_proc
         admin_proc = subprocess.Popen(["echo", self._admin_password], stdout=subprocess.PIPE)
 
-        cur_packet_name = pcapng_name + '_' + str(int(time.time())) + ".pcapng"
+        cur_packet_name = pcapng_name + '_' + str(int(time.time())) + "_" + self.distance + ".pcapng"
 
         # create folder
-        cur_packet_folder = self.PACKET_ROOT_PATH + cur_packet_name[:-7] + "/"
+        # cur_packet_folder = self.PACKET_ROOT_PATH + cur_packet_name[:-7] + "/"
+        cur_packet_folder = self.PACKET_ROOT_PATH + "_".join(cur_packet_name.split("_")[:-1]) + "/" + cur_packet_name.split("_")[-1][:-7] + "/"
         if not os.path.exists(cur_packet_folder):
             os.makedirs(cur_packet_folder)
 
@@ -164,6 +169,8 @@ class MitmCLs:
 
         admin_proc.kill()
 
+        self.cur_packet_folder = cur_packet_folder
+        self.cur_packet_name = cur_packet_name
         return cur_packet_name
 
     def stop_tshark(self):

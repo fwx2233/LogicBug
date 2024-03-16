@@ -8,12 +8,13 @@ from collections import OrderedDict
 from learn_model import format_tools, get_ips
 from log import mlog
 from learn_model.protocol_feature import feature_dict
+from config.device_appium_config import get_phone_and_device_ip
 
 ROOT_PATH = os.path.dirname(__file__)
 PACKET_ROOT_PATH = ROOT_PATH + "/packets/"
 
 FILTER_CONDITION = "((http or mqtt or ((udp and !dns) and (udp and !mdns))) and !bootp and !coap)"
-merged_ip_list = get_ips.merge_manual_ip_list([])
+merged_ip_list = get_ips.merge_manual_ip_list([])  # merge ip list visited by app
 condition_sentence = get_ips.generate_filter_condition_by_ip_list(merged_ip_list)
 FILTER_CONDITION = FILTER_CONDITION + " and " + condition_sentence
 
@@ -50,9 +51,9 @@ def get_highest_except_segments_layer_name(packet):
 
 
 def get_phone_ips():
-    from config.device_appium_config import device_configs
+    from config.device_appium_config import phone_configs
     ips = []
-    for phone, conf in device_configs.items():
+    for phone, conf in phone_configs.items():
         ip = conf["additionalMess"]["phone_ip"]
         if ip not in ips:
             ips.append(ip)
@@ -76,7 +77,6 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
     :param pcap: Given pcap file
     :param pcapng_file_name: The name of pcapng file, such as manually.pcapng
     :param dns_mapping_list: Map ip addresses to domain names
-    :param blackname_dict: Blacklist list of doain and ip. Content appearing in this list will not be considered as feature
     :param save_file_param: save_csv_flag:bool, op_file_name:str such as INVITE.txt, save_payload_flag:bool
     :return : header feature list
     """
@@ -143,17 +143,16 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
 
     # if save_csv_flag:
     if "save_csv_flag" in save_file_param and save_file_param["save_csv_flag"]:
-        if "op_file_name" in save_file_param:
+        if "op_file_path" in save_file_param:
             if "save_payload_flag" in save_file_param:
                 fieldnames_of_csv.insert(0, "payload")
             # save csv file
-            csv_file_path = PACKET_ROOT_PATH + pcapng_file_name.split(".")[0] + "/" + save_file_param["op_file_name"].split("_")[0] + "/" + save_file_param["op_file_name"].split(".")[0] + ".csv"
-            save_feature_in_csv_file(pcap_feature_dict_list, csv_file_path)
+            save_feature_in_csv_file(pcap_feature_dict_list, save_file_param["op_file_path"])
 
             if "save_payload_flag" in save_file_param:
                 fieldnames_of_csv.pop(0)
         else:
-            mlog.log_func(mlog.ERROR, "Parameter \"op_file_name\" is missing, could not save in csv file")
+            mlog.log_func(mlog.ERROR, "Parameter \"op_file_path\" is missing, could not save in csv file")
 
     return pcap_feature_dict_list
 
@@ -240,10 +239,10 @@ def get_dataset_name_list():
     return return_list
 
 
-def parse_dns_and_get_ip_domain(pcapng_file_name, keep_file_flag=True):
+def parse_dns_and_get_ip_domain(pcapng_file_path, keep_file_flag=True):
     """
     Parse the packet about the DNS in the given pcapng file and get a mapping of the ip-domain name
-    :param pcapng_file_name: packet under parsing
+    :param pcapng_file_path: packet under parsing
     :return : mapping list
     """
     # mlog.log_func(mlog.LOG, "Parsing DNS...")
@@ -273,7 +272,6 @@ def parse_dns_and_get_ip_domain(pcapng_file_name, keep_file_flag=True):
 
         return cur_mapping
 
-    pcapng_file_path = PACKET_ROOT_PATH + pcapng_file_name.split(".")[0] + "/" + pcapng_file_name
     cap = pyshark.FileCapture(pcapng_file_path, display_filter="dns")
     for packet in cap:
         if "dns" not in dir(packet):
@@ -316,39 +314,51 @@ def get_key_from_uri(uri_str):
 
 def get_url_pattern(dataset, threshold=0.5) -> dict:
     """
-    get http-url pattern for dataset
-    :param dataset: dataset
+    get http-url pattern for dataset.
+    :param dataset: dataset for analyse
     :param threshold: When the number of changes exceeds the <threshold>, the part is considered to be abstracted
     :return: pattern dictionary
     """
     result_dict = {}
     dataset_path = PACKET_ROOT_PATH + dataset + "/"
-    operation_folders = os.listdir(dataset_path)
-
-    for op in operation_folders:
-        if not os.path.isdir(dataset_path + op):
+    all_packet_folder_list = os.listdir(dataset_path)
+    for distance_folder in all_packet_folder_list:
+        if not os.path.isdir(dataset_path + distance_folder):
             continue
-        op_folder_path = dataset_path + op + "/"
-        file_list = os.listdir(op_folder_path)
+        distance_folder_path = dataset_path + distance_folder + "/"
+        under_distance_files = os.listdir(distance_folder_path)
 
-        # read from csv files
-        for file in file_list:
-            if op not in file or file.split(".")[-1] != "csv":
+        for user_pcap_txt in under_distance_files:
+            if not os.path.isdir(distance_folder_path + user_pcap_txt):
                 continue
-            with open(op_folder_path + file, "r") as f_handle:
-                reader = csv.reader(f_handle)
-                header = next(reader)
-                domain_index = list(header).index("domain")
-                uri_index = list(header).index("request_uri")
-                for line in list(reader):
-                    if line[uri_index] and line[domain_index]:
-                        if line[domain_index] not in result_dict:
-                            result_dict[line[domain_index]] = {}
-                        format_uri_key = get_key_from_uri(line[uri_index])
-                        if format_uri_key not in result_dict[line[domain_index]]:
-                            result_dict[line[domain_index]][format_uri_key] = []
-                        if line[uri_index] not in result_dict[line[domain_index]][format_uri_key]:
-                            result_dict[line[domain_index]][format_uri_key].append(line[uri_index])
+            user_folder_path = distance_folder_path + user_pcap_txt + "/"
+            operation_folders = os.listdir(user_folder_path)
+
+            for op in operation_folders:
+                if not os.path.isdir(user_folder_path + op):
+                    continue
+
+                op_folder_path = user_folder_path + op + "/"
+                file_list = os.listdir(op_folder_path)
+
+                # read from csv files
+                for file in file_list:
+                    if op not in file or file.split(".")[-1] != "csv":
+                        continue
+                    with open(op_folder_path + file, "r") as f_handle:
+                        reader = csv.reader(f_handle)
+                        header = next(reader)
+                        domain_index = list(header).index("domain")
+                        uri_index = list(header).index("request_uri")
+                        for line in list(reader):
+                            if line[uri_index] and line[domain_index]:
+                                if line[domain_index] not in result_dict:
+                                    result_dict[line[domain_index]] = {}
+                                format_uri_key = get_key_from_uri(line[uri_index])
+                                if format_uri_key not in result_dict[line[domain_index]]:
+                                    result_dict[line[domain_index]][format_uri_key] = []
+                                if line[uri_index] not in result_dict[line[domain_index]][format_uri_key]:
+                                    result_dict[line[domain_index]][format_uri_key].append(line[uri_index])
 
     pattern_dict = {}
     # get uri pattern
@@ -388,13 +398,6 @@ def modify_csv_by_pattern(csv_path, pattern_dict):
         for line in line_copy[1:]:
             if line[domain_index] in pattern_dict:
                 if line[uri_index] and get_key_from_uri(line[uri_index]) in pattern_dict[line[domain_index]]:
-                    # for pattern_str in pattern[line[domain_index]][get_key_from_uri(line[uri_index])]:
-                    #     prefix = pattern_str.split("Abs_Len")[0]
-                    #     suffix = "/".join(pattern_str.split("Ab_len_")[-1].split("/")[1:])
-                    #     if prefix in line[uri_index] and suffix in line[uri_index]:
-                    #         line[uri_index] = pattern_str
-                    #         flag = True
-                    #         break
                     pattern_oir_list_mode = format_tools.pattern_matching(line[uri_index], pattern_dict[line[domain_index]][get_key_from_uri(line[uri_index])])
                     if pattern_oir_list_mode:
                         line[uri_index] = "".join(pattern_oir_list_mode)
@@ -407,19 +410,30 @@ def modify_csv_by_pattern(csv_path, pattern_dict):
 
 def modify_dataset_by_pattern(dataset, pattern):
     dataset_path = PACKET_ROOT_PATH + dataset + "/"
-    operation_folders = os.listdir(dataset_path)
-
-    for op in operation_folders:
-        if not os.path.isdir(dataset_path + op):
+    all_packet_folder_list = os.listdir(dataset_path)
+    for distance_folder in all_packet_folder_list:
+        if not os.path.isdir(dataset_path + distance_folder):
             continue
-        op_folder_path = dataset_path + op + "/"
-        file_list = os.listdir(op_folder_path)
+        distance_folder_path = dataset_path + distance_folder + "/"
+        under_distance_files = os.listdir(distance_folder_path)
 
-        # read from csv files
-        for file in file_list:
-            if op not in file or file.split(".")[-1] != "csv":
+        for user_pcap_txt in under_distance_files:
+            if not os.path.isdir(distance_folder_path + user_pcap_txt):
                 continue
-            modify_csv_by_pattern(op_folder_path + file, pattern)
+            user_folder_path = distance_folder_path + user_pcap_txt + "/"
+            operation_folders = os.listdir(user_folder_path)
+
+            for op in operation_folders:
+                if not os.path.isdir(user_folder_path + op):
+                    continue
+                op_folder_path = user_folder_path + op + "/"
+                file_list = os.listdir(op_folder_path)
+
+                # read from csv files
+                for file in file_list:
+                    if op not in file or file.split(".")[-1] != "csv":
+                        continue
+                    modify_csv_by_pattern(op_folder_path + file, pattern)
 
 
 def pre_parse(dataset_list: list):
@@ -432,10 +446,13 @@ def pre_parse(dataset_list: list):
     mlog.log_list_func(mlog.LOG, dataset_list)
 
     with open(ROOT_PATH + "/../config/black_list.json", "r") as bf:
-        blackname_dict = json.load(bf)
-
+        black_dict = json.load(bf)
     mlog.log_func(mlog.LOG, "Blacklist: ")
-    mlog.log_dict_func(mlog.LOG, blackname_dict)
+    mlog.log_dict_func(mlog.LOG, black_dict)
+
+    phone_device_ip_dict = get_phone_and_device_ip()
+    mlog.log_func(mlog.LOG, "Phone and devices ip list: ")
+    mlog.log_dict_func(mlog.LOG, phone_device_ip_dict)
 
     temp_count = 0
     for dataset in dataset_list:
@@ -450,42 +467,76 @@ def pre_parse(dataset_list: list):
 
         dataset_path = PACKET_ROOT_PATH + dataset + "/"
 
-        # all_packet_folder_list = os.listdir(dataset_path)
-        # for operation_folder in all_packet_folder_list:
-        #     if not os.path.isdir(dataset_path + operation_folder):
+        all_packet_folder_list = os.listdir(dataset_path)
+        # for distance_folder in all_packet_folder_list:
+        #     if not os.path.isdir(dataset_path + distance_folder):
         #         continue
+        #     distance_folder_path = dataset_path + distance_folder + "/"  # dataset/local/
+        #     under_distance_files = os.listdir(distance_folder_path)
         #
-        #     mlog.log_func(mlog.LOG, f"-Operation: {operation_folder}")
-        #     # get operation folder
-        #     abs_operation_folder = dataset_path + operation_folder + "/"
-        #     file_list = os.listdir(abs_operation_folder)
-        #     # for each pcapng file, get its feature.csv file
-        #     for item in file_list:
-        #         if item.split('.')[-1] == "txt" and operation_folder in item:
-        #             temp_count += 1
-        #             mlog.log_func(mlog.LOG, str(temp_count) + " Reading file: " + item, t_count=1)
-        #             with open(abs_operation_folder + item, "r") as f:
-        #                 lines = f.readlines()
-        #                 pcap_name = lines[0].replace("\n", "")
-        #                 start_time = lines[1].replace("\n", "")
-        #                 end_time = lines[2].replace("\n", "")
+        #     for user_pcap_txt in under_distance_files:
+        #         if not os.path.isdir(distance_folder_path + user_pcap_txt):
+        #             continue
+        #         user_folder_path = distance_folder_path + user_pcap_txt + "/"  # dataset/local/user1/
+        #         operation_folders = os.listdir(user_folder_path)
         #
-        #             # get the knowledge of dns mapping from ip to domain
-        #             dns_mapping_list = parse_dns_and_get_ip_domain(dataset + ".pcapng")
+        #         for operation_folder in operation_folders:
+        #             if not os.path.isdir(user_folder_path + operation_folder):
+        #                 continue
         #
-        #             # read pcap file and extract features
-        #             keylog_file = pcap_name.split('.')[0] + ".txt"
-        #             cur_wireshark_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(blackname_dict)
-        #             pcap = pyshark.FileCapture(dataset_path + pcap_name, display_filter=cur_wireshark_filter_expression,
-        #                                        override_prefs={'ssl.keylog_file': dataset_path + keylog_file})
-        #             get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_name=item)
-        #             pcap.close()
+        #             mlog.log_func(mlog.LOG, f"-Operation: {distance_folder}|{user_pcap_txt}|{operation_folder}")
+        #             # get operation folder
+        #             abs_operation_folder = user_folder_path + operation_folder + "/"  # dataset/local/user1/operation/
+        #             file_list = os.listdir(abs_operation_folder)
+        #             # for each pcapng file, get its feature.csv file
+        #             for item in file_list:
+        #                 if item.split('.')[-1] == "txt" and operation_folder in item:
+        #                     temp_count += 1
+        #                     mlog.log_func(mlog.LOG, f"{str(temp_count)} Reading file: {item}", t_count=1)
+        #                     with open(abs_operation_folder + item, "r") as f:
+        #                         lines = f.readlines()
+        #                         pcap_name = lines[0].replace("\n", "")
+        #                         start_time = lines[1].replace("\n", "")
+        #                         end_time = lines[2].replace("\n", "")
         #
-        #             while(len(lines) > 3):
-        #                 lines.pop(-1)
-        #             lines.append("\n" + cur_wireshark_filter_expression)
-        #             with open(abs_operation_folder + item, "w") as f:
-        #                 f.writelines(lines)
+        #                     # get the knowledge of dns mapping from ip to domain
+        #                     dns_mapping_list = parse_dns_and_get_ip_domain(distance_folder_path + pcap_name)
+        #                     pd_dict = phone_device_ip_dict["devices"].copy()
+        #                     pd_dict.append(phone_device_ip_dict[user_pcap_txt][distance_folder])
+        #
+        #                     # read pcap file and extract features
+        #                     keylog_file = pcap_name.split('.')[0] + ".txt"
+        #                     cur_wireshark_filter_expression = (format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) +  # filter by time
+        #                                                        " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict) +  # filter by phone's ip and devices' ip
+        #                                                        " and " + FILTER_CONDITION +  # filter by protocol and white list
+        #                                                        " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict))  # filter by black list
+        #                     pcap = pyshark.FileCapture(distance_folder_path + pcap_name, display_filter=cur_wireshark_filter_expression,
+        #                                                override_prefs={'ssl.keylog_file': distance_folder_path + keylog_file})
+        #                     csv_path = abs_operation_folder + item.split(".")[0] + f"_{distance_folder}.csv"
+        #                     get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_path=csv_path)
+        #                     pcap.close()
+        #
+        #                     # if remote, read local pcap file
+        #                     if distance_folder == "remote":
+        #                         pcap_name = f"{'_'.join(pcap_name.split('_')[:-1])}_local.pcapng"
+        #                         local_pcap_file_path = f"{dataset_path}/local/{pcap_name}"
+        #                         local_txt_file_path = f"{local_pcap_file_path[:-6]}txt"
+        #
+        #                         # read
+        #                         pcap = pyshark.FileCapture(local_pcap_file_path,
+        #                                                    display_filter=cur_wireshark_filter_expression,
+        #                                                    override_prefs={'ssl.keylog_file': local_txt_file_path})
+        #                         csv_path = abs_operation_folder + item.split(".")[0] + "_local.csv"
+        #                         get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True,
+        #                                             op_file_path=csv_path)
+        #                         pcap.close()
+        #
+        #                     # write filter expression in txt file
+        #                     while len(lines) > 3:
+        #                         lines.pop(-1)
+        #                     lines.append("\n" + cur_wireshark_filter_expression)
+        #                     with open(abs_operation_folder + item, "w") as f:
+        #                         f.writelines(lines)
         #
         # # read dataset and get pattern
         # pattern = get_url_pattern(dataset)
@@ -499,52 +550,61 @@ def pre_parse(dataset_list: list):
 
         feature_filter_by_general_list = []
 
-        # Collect statistics on features whose number of occurrences exceeds the threshold
-        with open(ROOT_PATH + "/../config/black_list.json", "r") as bf:
-            black_dict = json.load(bf)
-
+        # add from black list
         if "full_feature" in black_dict:
             feature_filter_by_general_list.extend(black_dict["full_feature"])
 
+        # Collect statistics on features whose number of occurrences exceeds the threshold
         feature_ops_dict = {}
         count_of_op = 0
         # get feature aggregation from each csv and static appearance time
-        for operation in os.listdir(dataset_path):
-            # get operation folder
-            abs_operation_folder = dataset_path + operation + "/"
-            if not os.path.isdir(abs_operation_folder):
+        for distance_folder in all_packet_folder_list:
+            if not os.path.isdir(dataset_path + distance_folder):
                 continue
-            count_of_op += 1
-            file_list = os.listdir(abs_operation_folder)
-            for cur_file in file_list:
-                # find csv file
-                if cur_file[-3:] != "csv":
+            distance_folder_path = dataset_path + distance_folder + "/"
+            under_distance_files = os.listdir(distance_folder_path)
+
+            for user_pcap_txt in under_distance_files:
+                if not os.path.isdir(distance_folder_path + user_pcap_txt):
                     continue
+                user_folder_path = distance_folder_path + user_pcap_txt + "/"
+                operation_folders = os.listdir(user_folder_path)
 
-                # read csv file
-                with open(abs_operation_folder + cur_file, "r") as file:
-                    reader = csv.reader(file)
-                    header = next(reader)
-                    start_index = header.index("domain")
-                    protocol_index = header.index("protocol")
-                    lines = list(reader)
-                    for line in lines:
-                        cur_line_feature = "|".join(line[start_index:])
+                for operation in operation_folders:
+                    if not os.path.isdir(user_folder_path + operation):
+                        continue
 
-                        # filterd by black list
-                        for black_key in black_dict.keys():
-                            if black_key == "ip" or black_key == "full_feature":
-                                continue
-                            key_index = header.index(black_key)
-                            if line[key_index] in black_dict[
-                                black_key] and cur_line_feature not in feature_filter_by_general_list:
-                                feature_filter_by_general_list.append(cur_line_feature)
+                    abs_operation_folder = user_folder_path + operation + "/"
+                    count_of_op += 1
+                    file_list = os.listdir(abs_operation_folder)
+                    for cur_file in file_list:
+                        # find csv file
+                        if cur_file[-3:] != "csv":
+                            continue
 
-                        if line[protocol_index] in protocol_to_be_filtered:
-                            if cur_line_feature not in feature_ops_dict:
-                                feature_ops_dict[cur_line_feature] = [operation]
-                            elif operation not in feature_ops_dict[cur_line_feature]:
-                                feature_ops_dict[cur_line_feature].append(operation)
+                        # read csv file
+                        with open(abs_operation_folder + cur_file, "r") as file:
+                            reader = csv.reader(file)
+                            header = next(reader)
+                            start_index = header.index("domain")
+                            protocol_index = header.index("protocol")
+                            lines = list(reader)
+                            for line in lines:
+                                cur_line_feature = "|".join(line[start_index:])
+
+                                # filted by black list
+                                for black_key in black_dict.keys():
+                                    if black_key == "ip" or black_key == "full_feature":
+                                        continue
+                                    key_index = header.index(black_key)
+                                    if line[key_index] in black_dict[black_key] and cur_line_feature not in feature_filter_by_general_list:
+                                        feature_filter_by_general_list.append(cur_line_feature)
+
+                                if line[protocol_index] in protocol_to_be_filtered:
+                                    if cur_line_feature not in feature_ops_dict:
+                                        feature_ops_dict[cur_line_feature] = [operation]
+                                    elif operation not in feature_ops_dict[cur_line_feature]:
+                                        feature_ops_dict[cur_line_feature].append(operation)
 
         # sort by key
         feature_ops_dict = format_tools.sort_dict_by_key(feature_ops_dict)
@@ -576,210 +636,303 @@ def pre_parse(dataset_list: list):
         features_occur_for_each_time_dict = {}  # It is used to count the pattern corresponding to each feature when each click is executed under each operation
         # construct: {operation: {click_item: {feature: [payload_list]}}}
 
-        for operation in os.listdir(dataset_path):
-            total_op_pcap = 0
-            fea_times_in_cur_op_dict = {}
-            op_selected_features_dict[operation] = []
-
-            op_folder = dataset_path + operation + "/"
-            if not os.path.isdir(op_folder):
+        # get feature aggregation from each csv and static appearance time
+        for distance_folder in all_packet_folder_list:
+            if not os.path.isdir(dataset_path + distance_folder):
                 continue
+            if distance_folder not in features_occur_for_each_time_dict.keys():
+                features_occur_for_each_time_dict[distance_folder] = {}
+            distance_folder_path = dataset_path + distance_folder + "/"
+            under_distance_files = os.listdir(distance_folder_path)
 
-            if operation not in features_occur_for_each_time_dict:
-                features_occur_for_each_time_dict[operation] = dict()
-
-            for item in os.listdir(op_folder):
-                if item.split(".")[-1] != "csv":
+            for user_pcap_txt in under_distance_files:
+                if not os.path.isdir(distance_folder_path + user_pcap_txt):
                     continue
-                if item.split(".")[0] not in features_occur_for_each_time_dict[operation]:
-                    features_occur_for_each_time_dict[operation][item.split(".")[0]] = {}
-                total_op_pcap += 1
-                # read csv file and get appear time for each feature
-                with open(op_folder + item, "r") as file:
-                    reader = csv.reader(file)
-                    header = next(reader)
-                    start_index = header.index("domain")
-                    protocol_index = header.index("protocol")
-                    lines = list(reader)
-                    for line in lines:
-                        cur_line_feature = "|".join(line[start_index:])
-                        if line[protocol_index] not in protocol_to_be_filtered:
-                            if cur_line_feature not in features_occur_for_each_time_dict[operation][item.split(".")[0]]:
-                                features_occur_for_each_time_dict[operation][item.split(".")[0]][cur_line_feature] = []
+                if user_pcap_txt not in features_occur_for_each_time_dict[distance_folder]:
+                    features_occur_for_each_time_dict[distance_folder][user_pcap_txt] = {}
+                user_folder_path = distance_folder_path + user_pcap_txt + "/"
+                operation_folders = os.listdir(user_folder_path)
+
+                for operation in operation_folders:
+                    if not os.path.isdir(user_folder_path + operation):
+                        continue
+
+                    total_op_pcap = 0
+                    fea_times_in_cur_op_dict = {}
+                    op_selected_features_dict[operation] = []
+
+                    op_folder = user_folder_path + operation + "/"
+                    if not os.path.isdir(op_folder):
+                        continue
+
+                    if operation not in features_occur_for_each_time_dict[distance_folder][user_pcap_txt]:
+                        features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation] = dict()
+
+                    for item in os.listdir(op_folder):
+                        if item.split(".")[-1] == "txt" and operation in item:
+                            total_op_pcap += 1
+                        if item.split(".")[-1] != "csv":
                             continue
-                        if cur_line_feature not in feature_filter_by_general_list:
-                            if cur_line_feature not in fea_times_in_cur_op_dict:
-                                fea_times_in_cur_op_dict[cur_line_feature] = []
-                            if item not in fea_times_in_cur_op_dict[cur_line_feature]:
-                                fea_times_in_cur_op_dict[cur_line_feature].append(item)
-                            # add to features_occur_for_each_time_dict
-                            if cur_line_feature not in features_occur_for_each_time_dict[operation][item.split(".")[0]]:
-                                features_occur_for_each_time_dict[operation][item.split(".")[0]][cur_line_feature] = []
 
-            with open(op_folder + "feature_static.json", "w") as f:
-                f.write(json.dumps(fea_times_in_cur_op_dict, indent=4))
+                        if "_".join(item.split("_")[:-1]) not in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]:
+                            features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]["_".join(item.split("_")[:-1])] = {}
 
-            with open(op_folder + "filtered_features.txt", "w") as f:
-                for feature in fea_times_in_cur_op_dict:
-                    if len(fea_times_in_cur_op_dict[feature]) < threshold_in_one_op * total_op_pcap:
-                        f.write(feature)
-                        f.write("\n")
+                        # read csv file and get appear time for each feature
+                        with open(op_folder + item, "r") as file:
+                            reader = csv.reader(file)
+                            header = next(reader)
+                            start_index = header.index("domain")
+                            protocol_index = header.index("protocol")
+                            lines = list(reader)
+                            for line in lines:
+                                cur_line_feature = "|".join(line[start_index:])
+                                if line[protocol_index] not in protocol_to_be_filtered:
+                                    if cur_line_feature not in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]["_".join(item.split("_")[:-1])]:
+                                        features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]["_".join(item.split("_")[:-1])][cur_line_feature] = []
+                                    continue
+                                if cur_line_feature not in feature_filter_by_general_list:
+                                    if cur_line_feature not in fea_times_in_cur_op_dict:
+                                        fea_times_in_cur_op_dict[cur_line_feature] = []
+                                    if "_".join(item.split("_")[:-1]) not in fea_times_in_cur_op_dict[cur_line_feature]:
+                                        fea_times_in_cur_op_dict[cur_line_feature].append("_".join(item.split("_")[:-1]))
+                                    # add to features_occur_for_each_time_dict
+                                    if cur_line_feature not in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]["_".join(item.split("_")[:-1])]:
+                                        features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]["_".join(item.split("_")[:-1])][cur_line_feature] = []
 
-            with open(op_folder + "selected_features.txt", "w") as f:
-                for feature in fea_times_in_cur_op_dict:
-                    if len(fea_times_in_cur_op_dict[feature]) >= threshold_in_one_op * total_op_pcap:
-                        f.write(feature)
-                        f.write("\n")
-                        op_selected_features_dict[operation].append(feature)
+                    with open(op_folder + "feature_static.json", "w") as f:
+                        f.write(json.dumps(fea_times_in_cur_op_dict, indent=4))
+
+                    with open(op_folder + "filtered_features.txt", "w") as f:
+                        for feature in fea_times_in_cur_op_dict:
+                            if len(fea_times_in_cur_op_dict[feature]) < threshold_in_one_op * total_op_pcap:
+                                f.write(feature)
+                                f.write("\n")
+
+                    with open(op_folder + "selected_features.txt", "w") as f:
+                        for feature in fea_times_in_cur_op_dict:
+                            if len(fea_times_in_cur_op_dict[feature]) >= threshold_in_one_op * total_op_pcap:
+                                f.write(feature)
+                                f.write("\n")
+                                op_selected_features_dict[operation].append(feature)
+
+        # convert features to pattern
+        for operation in op_selected_features_dict.keys():
+            for index in range(len(op_selected_features_dict[operation])):
+                op_selected_features_dict[operation][index] = format_tools.split_feature_str_to_pattern_list(op_selected_features_dict[operation][index])
 
         """
                     ================================ module 4 ================================
                     get payload and payload pattern
         """
-        mlog.log_func(mlog.LOG, "Strat module 4: get payload from dataset")
-
+        mlog.log_func(mlog.LOG, "Start module 4: get payload from dataset and extract payload pattern")
+        # get feature aggregation from each csv and static appearance time
         op_feature_pattern_dict = {}
-        for operation in os.listdir(dataset_path):
-            op_folder = dataset_path + operation + "/"
-            if not os.path.isdir(op_folder):
+        for distance_folder in all_packet_folder_list:
+            if not os.path.isdir(dataset_path + distance_folder):
                 continue
+            distance_folder_path = dataset_path + distance_folder + "/"
+            if distance_folder not in op_feature_pattern_dict:
+                op_feature_pattern_dict[distance_folder] = dict()
+            under_distance_files = os.listdir(distance_folder_path)
 
-            mlog.log_func(mlog.LOG, f"Current operation: {operation}", t_count=1)
-
-            feature_payloads_dict = {}
-            for op_files in os.listdir(op_folder):
-                if op_files.split(".")[-1] != "csv":
+            for user_pcap_txt in under_distance_files:
+                if not os.path.isdir(distance_folder_path + user_pcap_txt):
                     continue
+                if user_pcap_txt not in op_feature_pattern_dict[distance_folder]:
+                    op_feature_pattern_dict[distance_folder][user_pcap_txt] = dict()
+                user_folder_path = distance_folder_path + user_pcap_txt + "/"
+                operation_folders = os.listdir(user_folder_path)
 
-                # get pcap name, filter condition from txt
-                txt_file_name = op_files.split(".")[0] + ".txt"
-                with open(op_folder + txt_file_name, "r") as f:
-                    txt_line = f.readlines()
-                    filter_condition = txt_line[-1].replace("\n", "")
-                    pcap_file_name = txt_line[0].replace("\n", "")
-                    key_file_name = pcap_file_name.split(".")[0] + ".txt"
+                for operation in operation_folders:
+                    op_folder = user_folder_path + operation + "/"
+                    if not os.path.isdir(op_folder):
+                        continue
 
-                # get selected packet number
-                cur_op_selected_features = op_selected_features_dict[operation]
-                selected_numbers_feature = {}
-                with open(op_folder + op_files, "r") as f:
-                    reader = csv.reader(f)
-                    header = next(reader)
-                    start_index = header.index("domain")
-                    protocol_index = header.index("protocol")
-                    resp_number_index = header.index("response_number")
-                    req_number_index = header.index("number")
-                    lines = list(reader)
-                    for line in lines:
-                        cur_line_feature = "|".join(line[start_index:])
-                        if line[protocol_index] not in protocol_to_be_filtered:
-                            selected_numbers_feature[line[req_number_index]] = cur_line_feature
+                    mlog.log_func(mlog.LOG, f"Current operation: {user_pcap_txt}|{distance_folder}|{operation}", t_count=1)
+
+                    feature_payloads_dict = {}
+                    for op_files in os.listdir(op_folder):
+                        if op_files.split(".")[-1] != "txt" or operation not in op_files:
                             continue
-                        if cur_line_feature in cur_op_selected_features:
-                            if line[resp_number_index]:
-                                selected_numbers_feature[line[resp_number_index]] = cur_line_feature
-                            else:
-                                if line[protocol_index] != "http":
-                                    selected_numbers_feature[line[req_number_index]] = cur_line_feature
 
-                # read pcap file and get payload
-                pcap = pyshark.FileCapture(dataset_path + pcap_file_name, display_filter=filter_condition, use_json=True,
-                                           override_prefs={'ssl.keylog_file': dataset_path + key_file_name})
-                for packet in pcap:
-                    str_number = str(packet.number)
-                    if str_number in selected_numbers_feature:
-                        if selected_numbers_feature[str_number] not in feature_payloads_dict:
-                            feature_payloads_dict[selected_numbers_feature[str_number]] = []
-                        payload = get_payload_from_packet(packet)
-                        feature_payloads_dict[selected_numbers_feature[str_number]].append(payload)
-                        features_occur_for_each_time_dict[operation][op_files.split(".")[0]][selected_numbers_feature[str_number]].append(payload)
-                pcap.close()
+                        # get pcap name, filter condition from txt
+                        pcap_files = {}
+                        with open(op_folder + op_files, "r") as f:
+                            txt_line = f.readlines()
+                            filter_condition = txt_line[-1].replace("\n", "")
+                            pcap_file_name = txt_line[0].replace("\n", "")
+                            key_file_name = pcap_file_name.split(".")[0] + ".txt"
+                            pcap_files[distance_folder] = [distance_folder_path + pcap_file_name,distance_folder_path + key_file_name]
+                            if distance_folder == "remote":
+                                local_pcap = "_".join(pcap_file_name.split("_")[:-1]) + "_local.pcapng"
+                                local_key = "_".join(key_file_name.split("_")[:-1]) + "_local.txt"
+                                pcap_files["local"] = [dataset_path + "local/" + local_pcap, dataset_path + "local/" + local_key]
 
-            # get patterns for payload split by length
-            feature_payloads_pattern = {}
-            for key in feature_payloads_dict:
-                feature_payloads_dict[key] = split_list_by_length(feature_payloads_dict[key])
-                if key not in feature_payloads_pattern:
-                    feature_payloads_pattern[key] = []
-                if "udp" not in key:
-                    for len_split_payloads in feature_payloads_dict[key]:
-                        feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads))
-                else:
-                    for len_split_payloads in feature_payloads_dict[key]:
-                        feature_payloads_pattern[key].append(format_tools.get_udp_payload_pattern(len_split_payloads))
+                        # get selected packet number
+                        cur_op_selected_features = op_selected_features_dict[operation]
+                        selected_numbers_feature = {}
+                        cur_op_csv_files = [
+                            op_files.split(".")[0] + "_remote.csv",
+                            op_files.split(".")[0] + "_local.csv",
+                        ]
 
-            op_feature_pattern_dict[operation] = feature_payloads_pattern
+                        # read csv file and get number_feature
+                        for csv_file in cur_op_csv_files:
+                            if not os.path.exists(op_folder + csv_file):
+                                continue
 
-            with open(dataset_path + operation + "/payload_static.json", "w") as f:
-                f.write(json.dumps(feature_payloads_dict, indent=4))
+                            # add distance to selected_number_feature
+                            cur_csv_distance = csv_file.split("_")[-1].split(".")[0]
+                            selected_numbers_feature[cur_csv_distance] = {}
 
-            # get payload pattern
-            with open(dataset_path + operation + "/payload_pattern.json", "w") as f:
-                f.write(json.dumps(feature_payloads_pattern, indent=4))
+                            # get selected numbers
+                            with open(op_folder + csv_file, "r") as f:
+                                reader = csv.reader(f)
+                                header = next(reader)
+                                start_index = header.index("domain")
+                                protocol_index = header.index("protocol")
+                                resp_number_index = header.index("response_number")
+                                req_number_index = header.index("number")
+                                lines = list(reader)
+                                for line in lines:
+                                    cur_line_feature = "|".join(line[start_index:])
+                                    # if protocol is not http or udp, add it to selected dictionary
+                                    if line[protocol_index] not in protocol_to_be_filtered:
+                                        selected_numbers_feature[cur_csv_distance][line[req_number_index]] = cur_line_feature
+                                        continue
+                                    if format_tools.pattern_matching(cur_line_feature, cur_op_selected_features):
+                                        cur_line_feature = "".join(cur_op_selected_features[format_tools.get_pattern_index_in_pattern_list(format_tools.pattern_matching(cur_line_feature, cur_op_selected_features), cur_op_selected_features)])
+                                        if line[resp_number_index]:
+                                            # add response number
+                                            selected_numbers_feature[cur_csv_distance][line[resp_number_index]] = cur_line_feature
+                                        else:
+                                            # if it doesn't have response number, add request number for analyse
+                                            if line[protocol_index] != "http":
+                                                selected_numbers_feature[cur_csv_distance][line[req_number_index]] = cur_line_feature
+
+                        # read pcap file and get payload
+                        for dist_index in pcap_files:
+                            # mlog.log_func(mlog.LOG, f"--- distance: {dist_index}", t_count=2)
+                            if not len(list(selected_numbers_feature[dist_index].keys())):
+                                continue
+
+                            pcap = pyshark.FileCapture(pcap_files[dist_index][0], display_filter=filter_condition, use_json=True,
+                                                       override_prefs={'ssl.keylog_file': pcap_files[dist_index][1]})
+                            for packet in pcap:
+                                str_number = str(packet.number)
+                                if str_number in selected_numbers_feature[dist_index]:
+                                    if selected_numbers_feature[dist_index][str_number] not in feature_payloads_dict:
+                                        feature_payloads_dict[selected_numbers_feature[dist_index][str_number]] = []
+                                    payload = get_payload_from_packet(packet)
+                                    feature_payloads_dict[selected_numbers_feature[dist_index][str_number]].append(payload)
+                                    features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][op_files.split(".")[0]][selected_numbers_feature[dist_index][str_number]].append(payload)
+                            pcap.close()
+
+                    # get patterns for payload split by length
+                    mlog.log_func(mlog.LOG, f"extracting payload patterns...", t_count=2)
+                    feature_payloads_pattern = {}
+                    for key in feature_payloads_dict:
+                        feature_payloads_dict[key] = split_list_by_length(feature_payloads_dict[key])
+                        if key not in feature_payloads_pattern:
+                            feature_payloads_pattern[key] = []
+                        if "udp" not in key:
+                            for len_split_payloads in feature_payloads_dict[key]:
+                                feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads))
+                        else:
+                            for len_split_payloads in feature_payloads_dict[key]:
+                                feature_payloads_pattern[key].append(format_tools.get_udp_payload_pattern(len_split_payloads))
+
+                    op_feature_pattern_dict[distance_folder][user_pcap_txt][operation] = feature_payloads_pattern
+
+                    with open(user_folder_path + operation + "/payload_static.json", "w") as f:
+                        f.write(json.dumps(feature_payloads_dict, indent=4))
+
+                    # get payload pattern
+                    with open(user_folder_path + operation + "/payload_pattern.json", "w") as f:
+                        f.write(json.dumps(feature_payloads_pattern, indent=4))
 
         """
         ================================ module 5 ================================
             get abstract class for each class of pattern
         """
-        mlog.log_func(mlog.LOG, "Strat module 5: classifying.")
+        mlog.log_func(mlog.LOG, "Start module 5: Classify")
+        for distance_folder in all_packet_folder_list:
+            if not os.path.isdir(dataset_path + distance_folder):
+                continue
+            distance_folder_path = dataset_path + distance_folder + "/"
+            under_distance_files = os.listdir(distance_folder_path)
 
-        not_in_feature_list = []
-        for operation in features_occur_for_each_time_dict.keys():
-            for click_item in features_occur_for_each_time_dict[operation]:
-                for feature in features_occur_for_each_time_dict[operation][click_item]:
-                    # check if pattern for current feature is match
-                    for index in range(len(features_occur_for_each_time_dict[operation][click_item][feature])):
-                        if feature not in op_feature_pattern_dict[operation]:
-                            not_in_feature_list.append((operation, click_item, feature))
-                            continue
-                        for each_len_patterns_list in op_feature_pattern_dict[operation][feature]:
-                            matched_pattern = format_tools.pattern_matching(features_occur_for_each_time_dict[operation][click_item][feature][index], each_len_patterns_list, "udp" in feature)
-                            if matched_pattern:
-                                features_occur_for_each_time_dict[operation][click_item][feature][index] = "".join(matched_pattern)
-                                break
+            for user_pcap_txt in under_distance_files:
+                if not os.path.isdir(distance_folder_path + user_pcap_txt):
+                    continue
+                user_folder_path = distance_folder_path + user_pcap_txt + "/"
+                operation_folders = os.listdir(user_folder_path)
 
-                    features_occur_for_each_time_dict[operation][click_item][feature] = list(set(features_occur_for_each_time_dict[operation][click_item][feature]))
+                not_in_feature_list = []
+                for operation in operation_folders:
+                    if not os.path.isdir(user_folder_path + operation):
+                        continue
+                    cur_op_pattern_features = list(op_feature_pattern_dict[distance_folder][user_pcap_txt][operation].keys())
+                    for temp_index in range(len(cur_op_pattern_features)):
+                        cur_op_pattern_features[temp_index] = format_tools.split_feature_str_to_pattern_list(cur_op_pattern_features[temp_index])
 
-        # get class
-        classify_dict = {}
-        for operation in features_occur_for_each_time_dict.keys():
-            if operation not in classify_dict:
-                classify_dict[operation] = []
-            for click_item in features_occur_for_each_time_dict[operation]:
-                temp_list = []
-                # Concatenate feature and pattern into a long string split by FPSPER
-                for feature in features_occur_for_each_time_dict[operation][click_item]:
-                    for pattern_str in features_occur_for_each_time_dict[operation][click_item][feature]:
-                        fp_str = feature + "FPSPER" + pattern_str
-                        temp_list.append(fp_str)
-                temp_list = sorted(list(set(temp_list)))
-                classify_dict[operation].append("CLSSPER".join(temp_list))
+                    for click_item in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]:
+                        for feature in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item]:
+                            # check if pattern for current feature is match
+                            for index in range(len(features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature])):
+                                if not format_tools.pattern_matching(feature, cur_op_pattern_features):
+                                    not_in_feature_list.append((operation, click_item, feature))
+                                    continue
+                                for each_len_patterns_list in op_feature_pattern_dict[distance_folder][user_pcap_txt][operation][feature]:
+                                    matched_pattern = format_tools.pattern_matching(features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature][index], each_len_patterns_list, "udp" in feature)
+                                    if matched_pattern:
+                                        features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature][index] = "".join(matched_pattern)
+                                        break
 
-            classify_dict[operation] = list(set(classify_dict[operation]))
-            # rename for class
-            for i in range(len(classify_dict[operation])):
-                classify_dict[operation][i] = classify_dict[operation][i].split("CLSSPER")
+                            features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature] = list(set(features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature]))
 
-            with open(dataset_path + operation + "/classify_result.json", "w") as f:
-                f.write(json.dumps(classify_dict[operation], indent=4))
+                # get class
+                classify_dict = {}
+                for operation in features_occur_for_each_time_dict[distance_folder][user_pcap_txt].keys():
+                    if operation not in classify_dict:
+                        classify_dict[operation] = []
+                    for click_item in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation]:
+                        temp_list = []
+                        # Concatenate feature and pattern into a long string split by FPSPER
+                        for feature in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item]:
+                            for pattern_str in features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature]:
+                                fp_str = feature + "FPSPER" + pattern_str
+                                temp_list.append(fp_str)
+                        temp_list = sorted(list(set(temp_list)))
+                        classify_dict[operation].append("CLSSPER".join(temp_list))
+
+                    classify_dict[operation] = list(set(classify_dict[operation]))
+                    # rename for class
+                    for i in range(len(classify_dict[operation])):
+                        classify_dict[operation][i] = classify_dict[operation][i].split("CLSSPER")
+
+                    with open(user_folder_path + operation + "/classify_result.json", "w") as f:
+                        f.write(json.dumps(classify_dict[operation], indent=4))
 
 
-def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_path, op_name, start_time, end_time):
+def get_new_op_class_for_response(database, new_pcapng_file_path, keylog_file_path, op_name, start_time, end_time):
     """
     Giving a new pcapng file of an operation, get it's abstract class
-    :param new_pcapng_file_name: pcapng_file under classifying, such as "SA_111.pcapng"
-    :param keylog_file_path: PATH to decrypted file corresponding to the pcapng file
-    :param op_name: current operation name
+    :param new_pcapng_file_path: PATH to pcapng file, such as "/path/to/SA_111.pcapng"
+    :param keylog_file_path: PATH to decrypted file, corresponding to the pcapng file
+    :param op_name: current operation full name, such as "user1|local|AddDevice"
     :param start_time: start timestamp of op_name
     :param end_time: end timestamp of op_name
     :return: abstract class for response -> str
     """
-    mlog.log_func(mlog.LOG, "Parse and get new response...")
-    pcapng_root_path = PACKET_ROOT_PATH + new_pcapng_file_name.split(".")[0] + "/"
-    pcapng_file_path = pcapng_root_path + new_pcapng_file_name
+    mlog.log_func(mlog.LOG, f"Parse and get new response for operation: {op_name}")
+
+    if not os.path.exists(new_pcapng_file_path):
+        mlog.log_func(mlog.ERROR, f"pcapng file path ERROR!: {new_pcapng_file_path}")
+        return None
 
     if not os.path.exists(keylog_file_path):
-        mlog.log_func(mlog.ERROR, "keylog file path error")
+        mlog.log_func(mlog.ERROR, f"keylog file path ERROR!: {keylog_file_path}")
         return None
 
     # Concatenate the path of the database
@@ -794,7 +947,7 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
                 filtered_features_list.append(line.replace("\n", ""))
 
     # read filtered features for current op_name
-    op_root_path = database_root_path + op_name + '/'
+    op_root_path = database_root_path + op_name.split("|")[1] + '/' + op_name.split("|")[0] + '/' + op_name.split("|")[-1] + '/'
     with open(op_root_path + "filtered_features.txt", "r") as f:
         for line in f.readlines():
             if line:
@@ -813,28 +966,44 @@ def get_new_op_class_for_response(database, new_pcapng_file_name, keylog_file_pa
         selected_features_list[index] = format_tools.split_feature_str_to_pattern_list(selected_features_list[index])
 
     # get the knowledge of dns mapping from ip to domain
-    dns_mapping = parse_dns_and_get_ip_domain(new_pcapng_file_name)
+    dns_mapping = parse_dns_and_get_ip_domain(new_pcapng_file_path)
 
-    # get blackname list
-    mlog.log_func(mlog.LOG, "Get black list from file...")
+    # get black name list
     with open(ROOT_PATH + "/../config/black_list.json", "r") as bf:
         black_dict = json.load(bf)
 
+    phone_device_ip_dict = get_phone_and_device_ip()
+    pd_dict = phone_device_ip_dict["devices"].copy()
+    pd_dict.append(phone_device_ip_dict[op_name.split("|")[0]][op_name.split("|")[1]])
+
     # generate filter expression of current operation
-    new_op_filter_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + FILTER_CONDITION + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict)
+    new_op_filter_expression = (format_tools.get_wireshark_filter_by_timestamp(start_time, end_time)
+                                + " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict)  # filter by phone's ip and devices' ip
+                                + " and " + FILTER_CONDITION
+                                + " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict))
 
     # save filter expression in file
-    with open(pcapng_root_path + op_name + "/" + op_name + "_" + str(int(start_time)) + ".txt", "w") as op_st_f:
-        op_st_f.write(new_pcapng_file_name + "\n")
+    with open("/".join(new_pcapng_file_path.split("/")[:-1]) + op_name.split("|")[0] + "/" + op_name.split("|")[-1] + "/" + op_name + "_" + str(int(start_time)) + ".txt", "w") as op_st_f:
+        op_st_f.write(new_pcapng_file_path.split("/")[-1] + "\n")
         op_st_f.write(str(start_time) + "\n")
         op_st_f.write(str(end_time) + "\n")
         op_st_f.write(new_op_filter_expression)
 
     # read pcapng file and get header features
-    pcap = pyshark.FileCapture(pcapng_file_path, display_filter=new_op_filter_expression,
+    pcap = pyshark.FileCapture(new_pcapng_file_path, display_filter=new_op_filter_expression,
                                override_prefs={'ssl.keylog_file': keylog_file_path})
-    new_op_header_features_dict_list = get_header_features(pcap, new_pcapng_file_name, dns_mapping, save_csv_flag=False)
+    new_op_header_features_dict_list = get_header_features(pcap, new_pcapng_file_path.split("/")[-1], dns_mapping, save_csv_flag=False)
     pcap.close()
+
+    # if current distance is remote, check local pcap too
+    if op_name.split("|")[1] == "remote":
+        correpsponding_local_pcap_path = "/".join(new_pcapng_file_path.split("/")[:-2]) + "/local/" + "_".join(new_pcapng_file_path.split("/")[-1].split("_")[:-1]) + "_local.pcapng"
+        correpsponding_local_key_file_path = correpsponding_local_pcap_path[:-6] + "txt"
+        pcap = pyshark.FileCapture(correpsponding_local_pcap_path, display_filter=new_op_filter_expression,
+                                   override_prefs={'ssl.keylog_file': correpsponding_local_key_file_path})
+        local_header_features_dict_list = get_header_features(pcap, correpsponding_local_pcap_path.split("/")[-1], dns_mapping,
+                                                               save_csv_flag=False)
+        pcap.close()
 
     # sort dict unit by list
     sorted_header_feature_list = []
@@ -1201,7 +1370,8 @@ if __name__ == "__main__":
     import time
 
     start_time = time.time()
-    pre_parse(["manual_dataset_1709359674"])
+    # pre_parse(["manual_dataset_1709359674"])
+    pre_parse(["double_wifi_dataset_1710416287"])
     # print(get_new_op_class_for_response("manual_dataset_1709359674", "manual_dataset_1708781404.pcapng", PACKET_ROOT_PATH + 'manual_dataset_1708781404/manual_dataset_1708781404.txt', "DCU1", 1708781573.2821207, 1708781577.2241092))
     # print(get_new_op_class_for_response("manual_dataset_1709359674", "manual_dataset_1708781404.pcapng", PACKET_ROOT_PATH + 'manual_dataset_1708781404/manual_dataset_1708781404.txt', "ADU1CWR", 1708781483.8227053, 1708781533.441152))
     end_time = time.time()
