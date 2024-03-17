@@ -538,6 +538,11 @@ def get_udp_payload_pattern(cases):
     return temp_patterns
 
 
+def get_feature_pattern_str(header_feature_str, patterns):
+    match_pattern = pattern_matching(header_feature_str, patterns)
+    return "".join(patterns[get_pattern_index_in_pattern_list(match_pattern, patterns)])
+
+
 if __name__ == "__main__":
     # read payload patterns from database
     print(get_wireshark_filter_by_timestamp(1710325796.775498, 1710325806.0281956))
