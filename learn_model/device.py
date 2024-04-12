@@ -56,16 +56,17 @@ class DeviceCls:
         self.val_but_dict = self.get_valuable_button()
 
         # start appium for listen
-        self.start_appium_server(self.APPIUM_PATH)
+        self._start_appium_server(self.APPIUM_PATH)
         time.sleep(2)
 
+        self.frida_flag = frida_flag
         if frida_flag:
             self._write_frida_hook_bash()
             if not self.check_frida_server():
                 mlog.log_func(mlog.ERROR, "frida server is not start, please check and restart")
-                self.stop_appium_server()
+                self._stop_appium_server()
                 exit(10)
-            self.start_frida_hook()
+            self._start_frida_hook()
             time.sleep(5)
 
         # test flag and other info
@@ -111,13 +112,13 @@ class DeviceCls:
             sc_file.write(f'script_path="{self.SCRIPTS_FOLDER}pinning_disable.js"\n')
             sc_file.write("frida -D $select_device -F $target_app -l $script_path")
 
-    def start_frida_hook(self):
+    def _start_frida_hook(self):
         mlog.log_func(mlog.LOG, "Start frida to ban the SSL Pinning")
         # start disable ssl pinning
         command = "bash " + self.SCRIPTS_FOLDER + f"start_pinning_frida_script_{self.DEVICE_NAME}.bash"
         sslpin_process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stdin=open("/dev/null"))
 
-    def stop_frida_hook(self):
+    def _stop_frida_hook(self):
         fine_name = self.SCRIPTS_FOLDER + "temp_tshark_ps"
         command = "ps -aux|grep frida > " + fine_name
         os.system(command)
@@ -130,7 +131,7 @@ class DeviceCls:
                 os.system('echo %s | sudo -S %s' % (self.admin_password, command))
         os.remove(fine_name)
 
-    def start_appium_server(self, path_to_appium):
+    def _start_appium_server(self, path_to_appium):
         mlog.log_func(mlog.LOG, "Start appium service....")
 
         path = "/".join(path_to_appium.split("/")[:-1]) + ":"
@@ -141,7 +142,7 @@ class DeviceCls:
                                        preexec_fn=os.setsid)
         self.appium_process = process
 
-    def stop_appium_server(self):
+    def _stop_appium_server(self):
         try:
             self.appium_process.terminate()
             time.sleep(1)
@@ -176,8 +177,10 @@ class DeviceCls:
 
     def stop_driver_and_appium_server(self):
         mlog.log_func(mlog.LOG, f"Driver <{self.DEVICE_NAME}> quit")
+        if self.frida_flag:
+            self._stop_frida_hook()
         self.driver.quit()
-        self.stop_appium_server()
+        self._stop_appium_server()
 
     def stop_and_restart_app(self):
         mlog.log_func(mlog.LOG, f"Device <{self.DEVICE_NAME}> stop and restart APP <{self.APK_NAME}>")
@@ -350,5 +353,8 @@ class DeviceCls:
 
 
 if __name__ == "__main__":
-    pixel7_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel7", "user1", frida_flag=True)
-    print(pixel7_entity.check_frida_server())
+    # pixel7_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel7", "user1", frida_flag=True)
+    pixel62_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel6-2", "user2", distance="local",frida_flag=False)
+    pixel62_entity.start_driver()
+    pixel62_entity.click_button("user2|local|DeviceControl")
+

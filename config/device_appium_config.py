@@ -2,7 +2,7 @@ appium_path = "/home/ubuntu1604/.nvm/versions/node/v12.22.12/bin/appium"
 
 phone_configs = {
     "nexus": {
-        # owner---local control and add device
+        # guest remote
         "platformName": "Android",
         "deviceName": "nexus",
         "appPackage": "com.huawei.smarthome",
@@ -13,7 +13,7 @@ phone_configs = {
         'newCommandTimeout': "600",
         "additionalMess": {
             "homePage": "com.huawei.smarthome.activity.MainActivity",
-            "wirelessCard": "wlxc01c302ff1cf",
+            "wirelessCard": "wlxaca2132b3483",
             "port": 4723,
             "appium_ip": "http://127.0.0.1:4723/wd/hub",
             "phone_ip": "10.42.1.15",
@@ -22,7 +22,7 @@ phone_configs = {
         }
     },
     "pixel7": {
-        # guest
+        # host local
         "platformName": "Android",
         "deviceName": "pixel7",
         "appPackage": "com.huawei.smarthome",
@@ -39,6 +39,46 @@ phone_configs = {
             "phone_ip": "10.42.0.230",
             "distance": "local",
             "user": "user1"
+        }
+    },
+    "pixel6-1": {
+        # host remote
+        "platformName": "Android",
+        "deviceName": "pixel6-1",
+        "appPackage": "com.huawei.smarthome",
+        "appActivity": ".login.LauncherActivity",
+        "udid": "1C071FDF60020H",
+        "noReset": True,
+        "dontStopAppOnReset": True,
+        'newCommandTimeout': "600",
+        "additionalMess": {
+            "homePage": "com.huawei.smarthome.activity.MainActivity",
+            "wirelessCard": "wlxaca2132b3483",
+            "port": 4725,
+            "appium_ip": "http://127.0.0.1:4725/wd/hub",
+            "phone_ip": "",
+            "distance": "remote",
+            "user": "user1"
+        }
+    },
+    "pixel6-2": {
+        # guest local
+        "platformName": "Android",
+        "deviceName": "pixel6-2",
+        "appPackage": "com.huawei.smarthome",
+        "appActivity": ".login.LauncherActivity",
+        "udid": "26151FDF6005FT",
+        "noReset": True,
+        "dontStopAppOnReset": True,
+        'newCommandTimeout': "600",
+        "additionalMess": {
+            "homePage": "com.huawei.smarthome.activity.MainActivity",
+            "wirelessCard": "wlxc01c30151c62",
+            "port": 4726,
+            "appium_ip": "http://127.0.0.1:4726/wd/hub",
+            "phone_ip": "",
+            "distance": "local",
+            "user": "user2"
         }
     }
 }

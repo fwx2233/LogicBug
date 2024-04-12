@@ -423,7 +423,6 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
     for distance_phone_dict in phone_entity_dict.values():
         for phone in distance_phone_dict.values():
             if phone:
-                phone.stop_frida_hook()
                 phone.stop_driver_and_appium_server()
 
 
