@@ -19,3 +19,6 @@ log/*.log
 .idea/
 
 venv/
+
+update_github.py
+update_log.txt
