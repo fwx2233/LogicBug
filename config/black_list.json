@@ -12,8 +12,11 @@
     "nsp-logservice-hiview-p43-drcn.obs.cn-north-2.myhuaweicloud.com"
   ],
   "ip": [
+    "238.238.238.238",
     "10.42.0.1",
-    "238.238.238.238"
+    "10.42.0.255",
+    "10.42.1.1",
+    "10.42.1.255"
   ],
   "request_uri": [
     "/opr-manager/v1/award/consumption",

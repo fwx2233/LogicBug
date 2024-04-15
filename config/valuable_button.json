@@ -543,12 +543,6 @@
           "description": "select second home"
         },
         "3": {
-          "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.RelativeLayout[2]/android.widget.ListView/android.widget.LinearLayout[2]",
-          "act_before": ".activity.MainActivity",
-          "act_after": ".activity.MainActivity",
-          "description": "select second home"
-        },
-        "4": {
           "xpath": "/hierarchy/android.widget.FrameLayout/android.widget.LinearLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.viewpager.widget.ViewPager/androidx.recyclerview.widget.RecyclerView/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.FrameLayout/android.widget.RelativeLayout/android.view.ViewGroup/androidx.viewpager.widget.ViewPager/android.widget.FrameLayout/android.widget.RelativeLayout/android.widget.FrameLayout/android.widget.FrameLayout/androidx.recyclerview.widget.RecyclerView/android.view.ViewGroup/android.widget.RelativeLayout/android.view.ViewGroup/android.widget.LinearLayout[3]/android.widget.FrameLayout",
           "act_before": ".activity.MainActivity",
           "act_after": ".activity.MainActivity",

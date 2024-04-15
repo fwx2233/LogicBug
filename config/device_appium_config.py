@@ -56,7 +56,7 @@ phone_configs = {
             "wirelessCard": "wlxaca2132b3483",
             "port": 4725,
             "appium_ip": "http://127.0.0.1:4725/wd/hub",
-            "phone_ip": "",
+            "phone_ip": "10.42.1.163",
             "distance": "remote",
             "user": "user1"
         }
@@ -76,7 +76,7 @@ phone_configs = {
             "wirelessCard": "wlxc01c30151c62",
             "port": 4726,
             "appium_ip": "http://127.0.0.1:4726/wd/hub",
-            "phone_ip": "",
+            "phone_ip": "10.42.0.66",
             "distance": "local",
             "user": "user2"
         }
