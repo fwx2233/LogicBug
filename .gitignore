@@ -7,7 +7,8 @@ learn_model/learnlib_module/target/
 learn_model/*.json
 learn_model/*.txt
 
-config/
+config/*.json
+config/*.txt
 
 apks/
 
