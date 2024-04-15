@@ -347,22 +347,6 @@ def learn_model_main(scan_result_name, database, learn_dir_name="learnlib_learn"
 def manual_create_database_for_double_wifi(scan_result_name, database_name="double_wifi_dataset"):
     mlog.log_func(mlog.LOG, "Manual test start")
 
-    # create an entity of learn and start driver
-    pixel_entity = DeviceCls(scan_result_name, "pixel7", "user1", "local", frida_flag=True)
-    pixel_entity.start_driver_and_init()
-    nexus_entity = DeviceCls(scan_result_name, "nexus", "user2", "remote", frida_flag=True)
-    nexus_entity.start_driver_and_init()
-    phone_entity_dict = {
-        "user1": {
-            "local": pixel_entity,
-            "remote": None
-        },
-        "user2": {
-            "local": None,
-            "remote": nexus_entity
-        }
-    }
-
     # init mitm entity
     local_mitm_entity = MitmCLs("local")
     remote_mitm_entity = MitmCLs("remote")
@@ -377,17 +361,43 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
         entity.start_mitm_main(not start_count)
         start_count += 1
 
+    # save distance and pcap file name
+    distance_capture_dict = {}
+
     # start tshark -- capture
     for entity in mitm_entity_list:
         capture_file_name = entity.start_tshark(f"{database_name}")
         # set name
-        for dis_phone in phone_entity_dict.values():
-            if dis_phone[entity.distance]:
-                dis_phone[entity.distance].set_packet_name(capture_file_name)
+        distance_capture_dict[entity.distance] = capture_file_name
 
     time.sleep(5)
+
+    # set phone config
+    phone_entity_dict = {
+        "user1": {
+            "local": "pixel7",
+            "remote": "pixel6-1"
+        },
+        "user2": {
+            "local": "nexus",
+            "remote": "pixel6-2"
+        }
+    }
+    # create phone entity for each
+    for user in phone_entity_dict:
+        for distance in phone_entity_dict[user]:
+            phone_name = phone_entity_dict[user][distance]
+            # create entity and init
+            phone_entity = DeviceCls(scan_result_name, phone_name, user, distance, frida_flag=True)
+            phone_entity.start_driver_and_init()
+            # set pcap file name
+            phone_entity.set_packet_name(distance_capture_dict[distance])
+            # save handle
+            phone_entity_dict[user][distance] = phone_entity
+
     test_order_list = ["user1|local|InviteToHome", "user2|remote|AcceptInvite", "user1|local|RemoveFromHome",
-                       "user1|local|AddDevice", "user1|local|DeviceControl", "user1|local|InviteToHome", "user2|remote|AcceptInvite", "user1|local|DeviceControl",
+                       "user1|local|AddDevice", "user1|local|DeviceControl", "user1|local|InviteToHome", "user1|remote|DeviceControl", "user2|remote|AcceptInvite",
+                       "user2|local|DeviceControl", "user1|remote|DeviceControl", "user2|remote|DeviceControl"
                        "user1|local|RemoveDevice", "user1|local|InviteToHome", "user1|local|AddDevice",
                        "user1|local|RemoveFromHome", "user1|local|RemoveDevice",
                        "user1|local|InviteToHome", "user2|remote|DenyInvite"]
@@ -396,7 +406,7 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
     mlog.log_list_func(mlog.LOG, test_order_list)
 
     error_flag = False
-    for count in range(2):
+    for count in range(3):
         if error_flag:
             break
         # test count
@@ -408,6 +418,9 @@ def manual_create_database_for_double_wifi(scan_result_name, database_name="doub
             if not phone_entity_dict[cur_user][cur_distance].back_to_home():
                 error_flag = True
                 break
+
+            # refresh
+            phone_entity_dict[cur_user][cur_distance].pull_to_refresh()
 
             # click and save file
             phone_entity_dict[cur_user][cur_distance].click_and_save(operation_full_name)

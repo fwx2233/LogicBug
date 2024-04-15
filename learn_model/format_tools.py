@@ -352,7 +352,85 @@ def get_patterns_for_cases(cases):
     return patterns
 
 
-def get_patterns_for_feature_payload_list(payload_list_for_cur_feature: list, is_udp=False):
+def get_unreadable_payload_pattern(cases):
+    # get readable char list
+    is_readable_char_list = [1] * len(cases[0].split(":"))
+
+    for index in range(len(is_readable_char_list)):
+        for item in cases:
+            if not ("7E" >= item.split(":")[index] >= "20"):
+                is_readable_char_list[index] = 0
+                break
+
+    zero_count = 0
+    one_count = 0
+    udp_payload_pattern_by_readable_list = []
+    for index in range(len(is_readable_char_list)):
+        if is_readable_char_list[index]:
+            if zero_count:
+                udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
+                zero_count = 0
+            one_count += 1
+        else:
+            if one_count:
+                udp_payload_pattern_by_readable_list.append(one_count)
+                one_count = 0
+            zero_count += 1
+    if zero_count:
+        udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
+    if one_count:
+        udp_payload_pattern_by_readable_list.append(one_count)
+
+    # convert byte to text
+    for case_index in range(len(cases)):
+        case_split = cases[case_index].split(":")
+        temp_case = []
+        readable_item_index = 0
+        case_split_index = 0
+        while readable_item_index < len(udp_payload_pattern_by_readable_list):
+            if type(udp_payload_pattern_by_readable_list[readable_item_index]) == int:
+                temp_str = ""
+                for count_index in range(udp_payload_pattern_by_readable_list[readable_item_index]):
+                    temp_str += chr(int(case_split[case_split_index + count_index], 16))
+                case_split_index = case_split_index + udp_payload_pattern_by_readable_list[readable_item_index]
+                temp_case.append(temp_str)
+            else:
+                t_count = int(udp_payload_pattern_by_readable_list[readable_item_index][7:-1])
+                # case_split_index += (t_count + 1)
+                case_split_index += t_count
+                temp_case.append(udp_payload_pattern_by_readable_list[readable_item_index])
+
+            readable_item_index += 1
+
+        cases[case_index] = "".join(temp_case)
+
+    temp_patterns = get_patterns_for_cases(cases)
+
+    for pattern_index in range(len(temp_patterns)):
+        temp_after_process_pattern = []
+        for pat_item in temp_patterns[pattern_index]:
+            if pat_item:
+                temp_after_process_pattern.extend(split_feature_str_to_pattern_list(pat_item))
+
+        # merge
+        merged_pattern = []
+        while temp_after_process_pattern:
+            cur_item = temp_after_process_pattern.pop(0)
+            if "Abs_Len" not in cur_item:
+                merged_pattern.append(cur_item)
+            else:
+                new_len = int(cur_item[len("Abs_Len"):-1])
+                while temp_after_process_pattern and "Abs_Len" in temp_after_process_pattern[0]:
+                    new_len += int(temp_after_process_pattern.pop(0)[len("Abs_Len"):-1])
+                merged_pattern.append(f"Abs_Len{new_len}|")
+
+        temp_patterns[pattern_index] = merged_pattern
+
+    # print(temp_patterns)
+    return temp_patterns
+
+
+def get_patterns_for_feature_payload_list(payload_list_for_cur_feature: list, is_hex=False):
     """
 
     :param payload_list_for_cur_feature:
@@ -360,10 +438,10 @@ def get_patterns_for_feature_payload_list(payload_list_for_cur_feature: list, is
     """
     pattern_list = []
     for each_len_payload_list in payload_list_for_cur_feature:
-        if not is_udp:
+        if not is_hex:
             pattern_list.append(get_patterns_for_cases(each_len_payload_list))
         else:
-            pattern_list.append(get_udp_payload_pattern(each_len_payload_list))
+            pattern_list.append(get_unreadable_payload_pattern(each_len_payload_list))
 
     return pattern_list
 
@@ -462,82 +540,6 @@ def split_feature_str_to_pattern_list(feature_str, abs_re = r"Abs_Len\d{1,}\|"):
     return temp_list
 
 
-def get_udp_payload_pattern(cases):
-    # get readable char list
-    is_readable_char_list = [1] * len(cases[0].split(":"))
-
-    for index in range(len(is_readable_char_list)):
-        for item in cases:
-            if not ("7E" >= item.split(":")[index] >= "20"):
-                is_readable_char_list[index] = 0
-                break
-
-    zero_count = 0
-    one_count = 0
-    udp_payload_pattern_by_readable_list = []
-    for index in range(len(is_readable_char_list)):
-        if is_readable_char_list[index]:
-            if zero_count:
-                udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
-                zero_count = 0
-            one_count += 1
-        else:
-            if one_count:
-                udp_payload_pattern_by_readable_list.append(one_count)
-                one_count = 0
-            zero_count += 1
-    if zero_count:
-        udp_payload_pattern_by_readable_list.append("Abs_Len" + str(zero_count) + "|")
-    if one_count:
-        udp_payload_pattern_by_readable_list.append(one_count)
-
-    # convert byte to text
-    for case_index in range(len(cases)):
-        case_split = cases[case_index].split(":")
-        temp_case = []
-        readable_item_index = 0
-        case_split_index = 0
-        while readable_item_index < len(udp_payload_pattern_by_readable_list):
-            if type(udp_payload_pattern_by_readable_list[readable_item_index]) == int:
-                temp_str = ""
-                for case_split_index in range(case_split_index, case_split_index + udp_payload_pattern_by_readable_list[readable_item_index]):
-                    temp_str += chr(int(case_split[case_split_index], 16))
-                temp_case.append(temp_str)
-            else:
-                t_count = int(udp_payload_pattern_by_readable_list[readable_item_index][7:-1])
-                case_split_index += (t_count + 1)
-                temp_case.append(udp_payload_pattern_by_readable_list[readable_item_index])
-
-            readable_item_index += 1
-
-        cases[case_index] = "".join(temp_case)
-
-    temp_patterns = get_patterns_for_cases(cases)
-
-    for pattern_index in range(len(temp_patterns)):
-        temp_after_process_pattern = []
-        for pat_item in temp_patterns[pattern_index]:
-            if pat_item:
-                temp_after_process_pattern.extend(split_feature_str_to_pattern_list(pat_item))
-
-        # merge
-        merged_pattern = []
-        while temp_after_process_pattern:
-            cur_item = temp_after_process_pattern.pop(0)
-            if "Abs_Len" not in cur_item:
-                merged_pattern.append(cur_item)
-            else:
-                new_len = int(cur_item[len("Abs_Len"):-1])
-                while temp_after_process_pattern and "Abs_Len" in temp_after_process_pattern[0]:
-                    new_len += int(temp_after_process_pattern.pop(0)[len("Abs_Len"):-1])
-                merged_pattern.append(f"Abs_Len{new_len}|")
-
-        temp_patterns[pattern_index] = merged_pattern
-
-    # print(temp_patterns)
-    return temp_patterns
-
-
 def get_feature_pattern_str(header_feature_str, patterns):
     match_pattern = pattern_matching(header_feature_str, patterns)
     return "".join(patterns[get_pattern_index_in_pattern_list(match_pattern, patterns)])
@@ -545,5 +547,5 @@ def get_feature_pattern_str(header_feature_str, patterns):
 
 if __name__ == "__main__":
     # read payload patterns from database
-    print(get_wireshark_filter_by_timestamp(1710325796.775498, 1710325806.0281956))
-    print(generate_selected_expression_by_ip_list(["10.42.0.185", "10.42.1.15"]))
+    test_list = ['00:af:52:02:1e:fc:b4:2e:73:79:73:05:6c:6f:67:69:6e:e4:06:ed:6e:1e:7c:6b:ff:b8:9c:67:a8:79:9d:0b:75:7c:46:fc:af:f6:3b:96:c5:9f:cf:83:a9:1d:89:0f:39:05:81:ef:22:cf:c9:6a:28:15:1e:ef:d5:3e:e1:81:df:e1:81:14:2b:d2:f8:86:7d:ab:ae:a3:ce:4c:d7:0f:fd:ac:60:38:27:bd:bf:87:d3:ff:aa:fb:c0:a1:8f:53:8f:3f:df:ee:da:20:f2:7f:8b:c3:d2:a4:d7:1b:81:04:11:20:41:c9:71:3c:4e:79:bf:dd:24:81:ef:eb:8d:6b:ff:0c:4a:ca:f6:68:8c:13:e0:67:86:67:bd:16:12:6f:75:50:ac:74:0a:2b:49:c4:a0:ab:9e:2c:4b:d9:6a:b3:e0:87:de:79:b2:b4:47:31:cf:5d:6a:0a:62:e8:e8:9f:4d', '00:af:52:02:3d:1c:b4:2e:73:79:73:05:6c:6f:67:69:6e:e4:06:ed:2b:9f:e4:bd:ff:61:52:5b:3b:5e:b2:bd:b3:9c:52:db:fa:b9:0c:34:9e:1c:35:64:85:fe:c8:4e:c5:82:5e:b4:96:2f:59:fd:83:e6:23:b7:7f:08:4d:57:5b:15:8c:9a:4b:40:69:01:e4:f0:21:11:c8:2f:6f:35:17:55:b1:aa:cb:f7:59:30:d8:9a:81:74:4e:28:59:0e:0b:f0:21:2a:15:6b:b8:c2:bb:04:33:48:bc:1a:28:7b:a6:37:46:07:13:f9:30:e7:a8:98:90:4b:a2:02:cd:69:21:85:f0:60:9d:d6:cd:d8:94:13:79:c4:a6:f5:89:06:a9:71:5c:4e:43:6c:c7:15:55:1f:5d:79:c8:f2:03:17:dc:f6:7d:a0:0b:06:43:5a:a8:a7:ac:07:2a:38:ac:b0:45', '00:af:52:02:d2:ad:b4:2e:73:79:73:05:6c:6f:67:69:6e:e4:06:ed:7b:10:95:cb:ff:9f:a7:16:d2:80:55:b4:47:2d:c6:c0:70:26:a0:30:a0:e3:70:60:84:f9:14:5a:33:d3:a3:60:08:f2:25:fc:61:1f:f0:89:3f:b8:6a:08:8c:76:99:e5:93:c9:33:12:68:eb:6d:6d:ff:6a:e9:d9:30:35:9a:7d:70:76:41:d7:e0:22:94:1c:b9:01:d0:c8:5a:2e:45:a4:1d:8d:46:62:cc:35:4d:c4:76:d8:04:9e:29:e2:68:f4:6a:ca:0a:89:8c:29:70:72:83:cd:f2:43:0f:22:93:83:38:6e:6b:6d:e9:80:1c:f7:3b:ad:91:d6:d7:fa:fe:6d:b5:5c:3d:12:af:fd:ac:e5:7b:6a:68:68:c9:84:04:7c:52:12:ed:8a:e4:02:27:8c:a6:8c:db:9c:4d']
+    print(get_unreadable_payload_pattern(test_list))

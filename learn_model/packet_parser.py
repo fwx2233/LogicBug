@@ -8,13 +8,13 @@ from collections import OrderedDict
 from learn_model import format_tools, get_ips
 from log import mlog
 from learn_model.protocol_feature import feature_dict
-from config.device_appium_config import get_phone_and_device_ip
+from config.device_appium_config import get_phone_and_device_ip, device_ip_list
 
 ROOT_PATH = os.path.dirname(__file__)
 PACKET_ROOT_PATH = ROOT_PATH + "/packets/"
 
-FILTER_CONDITION = "((http or mqtt or ((udp and !dns) and (udp and !mdns))) and !bootp and !coap)"
-merged_ip_list = get_ips.merge_manual_ip_list([])  # merge ip list visited by app
+FILTER_CONDITION = "(http or mqtt or ((udp and !dns) and (udp and !mdns) and (udp and !icmp) and (udp and !bootp) and (udp and !coap) and (udp and !ntp)) or (tcp and !(tcp.analysis.retransmission)))"
+merged_ip_list = get_ips.merge_manual_ip_list(device_ip_list)  # merge ip list visited by app
 condition_sentence = get_ips.generate_filter_condition_by_ip_list(merged_ip_list)
 FILTER_CONDITION = FILTER_CONDITION + " and " + condition_sentence
 
@@ -26,7 +26,7 @@ threshold_among_each_kind_of_operation = 0.5
 threshold_in_one_op = 0.85
 
 not_feature_list = feature_dict["record"]
-protocol_to_be_filtered = ["http", "udp"]
+protocol_to_be_filtered = ["http", "udp", "tcp"]
 
 fieldnames_of_csv = []
 for protocol_name in feature_dict.keys():
@@ -44,16 +44,6 @@ def get_highest_except_segments_layer_name(packet):
             pass
         else:
             return ori_layer_list[temp_index].split()[0]
-
-
-def get_phone_ips():
-    from config.device_appium_config import phone_configs
-    ips = []
-    for phone, conf in phone_configs.items():
-        ip = conf["additionalMess"]["phone_ip"]
-        if ip not in ips:
-            ips.append(ip)
-    return ips
 
 
 def save_feature_in_csv_file(feature_list, csv_path):
@@ -76,6 +66,16 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
     :param save_file_param: save_csv_flag:bool, op_file_name:str such as INVITE.txt, save_payload_flag:bool
     :return : header feature list
     """
+
+    def get_phone_ips():
+        from config.device_appium_config import phone_configs
+        ips = []
+        for phone, conf in phone_configs.items():
+            ip = conf["additionalMess"]["phone_ip"]
+            if ip not in ips:
+                ips.append(ip)
+        return ips
+
     pcap_feature_dict_list = []
     packet_num = 0
     merge_flag = False
@@ -94,6 +94,7 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
             packet_feature_dict["srcport"] = packet[packet.transport_layer].srcport
         else:
             packet_feature_dict["srcport"] = None
+
         if packet.ip.dst not in get_phone_ips():
             packet_feature_dict["dstport"] = packet[packet.transport_layer].dstport
         else:
@@ -106,7 +107,10 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
             if protocol_name in ["record", "common"]:
                 continue
             if protocol_name in packet:
-                packet_feature_dict["protocol"] = protocol_name
+                if "protocol" not in packet_feature_dict:
+                    packet_feature_dict["protocol"] = protocol_name
+                else:
+                    continue
                 cur_layer = packet[protocol_name]
                 for field_name in feature_dict[protocol_name]:
                     if field_name in cur_layer.field_names:
@@ -130,6 +134,10 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
             else:
                 for field_name in feature_dict[protocol_name]:
                     packet_feature_dict[field_name] = None
+
+        # ignore if len of tcp is 0
+        if packet_feature_dict["protocol"] == "tcp" and packet_feature_dict["len"] == "0":
+            continue
 
         if not merge_flag:
             pcap_feature_dict_list.append(packet_feature_dict)
@@ -156,6 +164,7 @@ def get_header_features(pcap: pyshark.FileCapture, pcapng_file_name: str, dns_ma
 def get_payload_from_packet(packet):
     highest_layer_name = get_highest_except_segments_layer_name(packet)
     return_str = None
+    unreadable_data = False
 
     # udp
     if "udp" in packet:
@@ -185,7 +194,7 @@ def get_payload_from_packet(packet):
                     else:
                         return_str = sorted_http_field_names[0]
         # mqtt
-        if "mqtt" in packet:
+        elif "mqtt" in packet:
             mqtt_layer = packet.mqtt
             field_names = sorted(mqtt_layer.field_names)
             if "msg" in field_names:
@@ -197,6 +206,11 @@ def get_payload_from_packet(packet):
                     if "len" not in field and "msgid" not in field:
                         mqtt_info[field] = mqtt_layer._get_internal_field_by_name(field)
                 return_str = mqtt_info
+        else:
+            # just tcp
+            if "payload" in packet.tcp.field_names:
+                return_str = str(packet.tcp.get_field("payload"))
+                return return_str
 
     if return_str:
         return format_tools.remove_string_by_some_pattern(str(return_str))
@@ -454,79 +468,80 @@ def pre_parse(dataset_list: list):
         dataset_path = PACKET_ROOT_PATH + dataset + "/"
 
         all_packet_folder_list = os.listdir(dataset_path)
-        for distance_folder in all_packet_folder_list:
-            if not os.path.isdir(dataset_path + distance_folder):
-                continue
-            distance_folder_path = dataset_path + distance_folder + "/"  # dataset/local/
-            under_distance_files = os.listdir(distance_folder_path)
-
-            for user_pcap_txt in under_distance_files:
-                if not os.path.isdir(distance_folder_path + user_pcap_txt):
-                    continue
-                user_folder_path = distance_folder_path + user_pcap_txt + "/"  # dataset/local/user1/
-                operation_folders = os.listdir(user_folder_path)
-
-                for operation_folder in operation_folders:
-                    if not os.path.isdir(user_folder_path + operation_folder):
-                        continue
-
-                    mlog.log_func(mlog.LOG, f"-Operation: {distance_folder}|{user_pcap_txt}|{operation_folder}")
-                    # get operation folder
-                    abs_operation_folder = user_folder_path + operation_folder + "/"  # dataset/local/user1/operation/
-                    file_list = os.listdir(abs_operation_folder)
-                    # for each pcapng file, get its feature.csv file
-                    for item in file_list:
-                        if item.split('.')[-1] == "txt" and operation_folder in item:
-                            temp_count += 1
-                            mlog.log_func(mlog.LOG, f"{str(temp_count)} Reading file: {item}", t_count=1)
-                            with open(abs_operation_folder + item, "r") as f:
-                                lines = f.readlines()
-                                pcap_name = lines[0].replace("\n", "")
-                                start_time = lines[1].replace("\n", "")
-                                end_time = lines[2].replace("\n", "")
-
-                            # get the knowledge of dns mapping from ip to domain
-                            dns_mapping_list = parse_dns_and_get_ip_domain(distance_folder_path + pcap_name)
-                            pd_dict = phone_device_ip_dict["devices"].copy()
-                            pd_dict.append(phone_device_ip_dict[user_pcap_txt][distance_folder])
-
-                            # read pcap file and extract features
-                            keylog_file = pcap_name.split('.')[0] + ".txt"
-                            cur_wireshark_filter_expression = (format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) +  # filter by time
-                                                               " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict) +  # filter by phone's ip and devices' ip
-                                                               " and " + FILTER_CONDITION +  # filter by protocol and white list
-                                                               " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict))  # filter by black list
-                            pcap = pyshark.FileCapture(distance_folder_path + pcap_name, display_filter=cur_wireshark_filter_expression,
-                                                       override_prefs={'ssl.keylog_file': distance_folder_path + keylog_file})
-                            csv_path = abs_operation_folder + item.split(".")[0] + f"_{distance_folder}.csv"
-                            get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_path=csv_path)
-                            pcap.close()
-
-                            # if remote, read local pcap file
-                            if distance_folder == "remote":
-                                pcap_name = f"{'_'.join(pcap_name.split('_')[:-1])}_local.pcapng"
-                                local_pcap_file_path = f"{dataset_path}/local/{pcap_name}"
-                                local_txt_file_path = f"{local_pcap_file_path[:-6]}txt"
-
-                                # read
-                                pcap = pyshark.FileCapture(local_pcap_file_path,
-                                                           display_filter=cur_wireshark_filter_expression,
-                                                           override_prefs={'ssl.keylog_file': local_txt_file_path})
-                                csv_path = abs_operation_folder + item.split(".")[0] + "_local.csv"
-                                get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True,
-                                                    op_file_path=csv_path)
-                                pcap.close()
-
-                            # write filter expression in txt file
-                            while len(lines) > 3:
-                                lines.pop(-1)
-                            lines.append("\n" + cur_wireshark_filter_expression)
-                            with open(abs_operation_folder + item, "w") as f:
-                                f.writelines(lines)
-
-        # read dataset and get pattern
-        pattern = get_url_pattern(dataset)
-        modify_dataset_by_pattern(dataset, pattern)
+        # for distance_folder in all_packet_folder_list:
+        #     if not os.path.isdir(dataset_path + distance_folder):
+        #         continue
+        #     distance_folder_path = dataset_path + distance_folder + "/"  # dataset/local/
+        #     under_distance_files = os.listdir(distance_folder_path)
+        #
+        #     for user_pcap_txt in under_distance_files:
+        #         if not os.path.isdir(distance_folder_path + user_pcap_txt):
+        #             continue
+        #         user_folder_path = distance_folder_path + user_pcap_txt + "/"  # dataset/local/user1/
+        #         operation_folders = os.listdir(user_folder_path)
+        #
+        #         for operation_folder in operation_folders:
+        #             if not os.path.isdir(user_folder_path + operation_folder):
+        #                 continue
+        #
+        #             mlog.log_func(mlog.LOG, f"-Operation: {distance_folder}|{user_pcap_txt}|{operation_folder}")
+        #             # get operation folder
+        #             abs_operation_folder = user_folder_path + operation_folder + "/"  # dataset/local/user1/operation/
+        #             file_list = os.listdir(abs_operation_folder)
+        #             # for each pcapng file, get its feature.csv file
+        #             for item in file_list:
+        #                 if item.split('.')[-1] == "txt" and operation_folder in item:
+        #                     temp_count += 1
+        #                     mlog.log_func(mlog.LOG, f"{str(temp_count)} Reading file: {item}", t_count=1)
+        #                     with open(abs_operation_folder + item, "r") as f:
+        #                         lines = f.readlines()
+        #                         pcap_name = lines[0].replace("\n", "")
+        #                         start_time = lines[1].replace("\n", "")
+        #                         end_time = lines[2].replace("\n", "")
+        #
+        #                     # get the knowledge of dns mapping from ip to domain
+        #                     dns_mapping_list = parse_dns_and_get_ip_domain(distance_folder_path + pcap_name)
+        #                     pd_dict = phone_device_ip_dict["devices"].copy()
+        #                     pd_dict.append(phone_device_ip_dict[user_pcap_txt][distance_folder])
+        #
+        #                     # read pcap file and extract features
+        #                     keylog_file = pcap_name.split('.')[0] + ".txt"
+        #                     cur_wireshark_filter_expression = (format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) +  # filter by time
+        #                                                        " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict) +  # filter by phone's ip and devices' ip
+        #                                                        " and " + FILTER_CONDITION +  # filter by protocol and white list
+        #                                                        " and " + format_tools.get_wireshark_filter_expression_by_blackname_list_dict(black_dict))  # filter by black list
+        #                     pcap = pyshark.FileCapture(distance_folder_path + pcap_name, display_filter=cur_wireshark_filter_expression,
+        #                                                override_prefs={'ssl.keylog_file': distance_folder_path + keylog_file})
+        #                     csv_path = abs_operation_folder + item.split(".")[0] + f"_{distance_folder}.csv"
+        #                     get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True, op_file_path=csv_path)
+        #                     pcap.close()
+        #
+        #                     # if remote, read local pcap file
+        #                     if distance_folder == "remote":
+        #                         pcap_name = f"{'_'.join(pcap_name.split('_')[:-1])}_local.pcapng"
+        #                         local_pcap_file_path = f"{dataset_path}/local/{pcap_name}"
+        #                         local_txt_file_path = f"{local_pcap_file_path[:-6]}txt"
+        #
+        #                         local_wireshark_expression = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict)
+        #                         # read
+        #                         pcap = pyshark.FileCapture(local_pcap_file_path,
+        #                                                    display_filter=local_wireshark_expression,
+        #                                                    override_prefs={'ssl.keylog_file': local_txt_file_path})
+        #                         csv_path = abs_operation_folder + item.split(".")[0] + "_local.csv"
+        #                         get_header_features(pcap, pcap_name, dns_mapping_list, save_csv_flag=True,
+        #                                             op_file_path=csv_path)
+        #                         pcap.close()
+        #
+        #                     # write filter expression in txt file
+        #                     while len(lines) > 3:
+        #                         lines.pop(-1)
+        #                     lines.append("\n" + cur_wireshark_filter_expression)
+        #                     with open(abs_operation_folder + item, "w") as f:
+        #                         f.writelines(lines)
+        #
+        # # read dataset and get pattern
+        # pattern = get_url_pattern(dataset)
+        # modify_dataset_by_pattern(dataset, pattern)
 
         """
             ================================ module 2 ================================
@@ -535,18 +550,24 @@ def pre_parse(dataset_list: list):
         mlog.log_func(mlog.LOG, "Start module 2: filtering packet which appears more than threshold times among all operations.")
 
         feature_filter_by_general_list = []
+        black_list = []
 
         # add from black list
         if "full_feature" in black_dict:
+            black_list.extend(black_dict["full_feature"])
             feature_filter_by_general_list.extend(black_dict["full_feature"])
 
         # Collect statistics on features whose number of occurrences exceeds the threshold
         feature_ops_dict = {}
-        count_of_op = 0
         # get feature aggregation from each csv and static appearance time
         for distance_folder in all_packet_folder_list:
             if not os.path.isdir(dataset_path + distance_folder):
                 continue
+
+            count_of_op = 0
+            feature_ops_dict[distance_folder] = {}
+            cur_distance_filter_features = []
+
             distance_folder_path = dataset_path + distance_folder + "/"
             under_distance_files = os.listdir(distance_folder_path)
 
@@ -561,6 +582,8 @@ def pre_parse(dataset_list: list):
                         continue
 
                     abs_operation_folder = user_folder_path + operation + "/"
+
+                    full_operation_name = f"{distance_folder}|{user_pcap_txt}|{operation}"
                     count_of_op += 1
                     file_list = os.listdir(abs_operation_folder)
                     for cur_file in file_list:
@@ -578,7 +601,7 @@ def pre_parse(dataset_list: list):
                             for line in lines:
                                 cur_line_feature = "|".join(line[start_index:])
 
-                                # filted by black list
+                                # filter by black list
                                 for black_key in black_dict.keys():
                                     if black_key == "ip" or black_key == "full_feature":
                                         continue
@@ -586,31 +609,43 @@ def pre_parse(dataset_list: list):
                                     if line[key_index] in black_dict[black_key] and cur_line_feature not in feature_filter_by_general_list:
                                         feature_filter_by_general_list.append(cur_line_feature)
 
+                                # check if current protocol will be filtered
                                 if line[protocol_index] in protocol_to_be_filtered:
-                                    if cur_line_feature not in feature_ops_dict:
-                                        feature_ops_dict[cur_line_feature] = [operation]
-                                    elif operation not in feature_ops_dict[cur_line_feature]:
-                                        feature_ops_dict[cur_line_feature].append(operation)
+                                    if cur_line_feature not in feature_ops_dict[distance_folder]:
+                                        feature_ops_dict[distance_folder][cur_line_feature] = [full_operation_name]
+                                    elif full_operation_name not in feature_ops_dict[distance_folder][cur_line_feature]:
+                                        feature_ops_dict[distance_folder][cur_line_feature].append(full_operation_name)
 
-        # sort by key
-        feature_ops_dict = format_tools.sort_dict_by_key(feature_ops_dict)
+            # static in distance
+            feature_ops_dict[distance_folder] = format_tools.sort_dict_by_key(feature_ops_dict[distance_folder])
+            with open(distance_folder_path + "feature_static.json", "w") as f:
+                f.write(json.dumps(feature_ops_dict[distance_folder], indent=4))
+
+            # record feature in black list
+            with open(distance_folder_path + "filtered_features.txt", "w") as f:
+                for feature in black_list:
+                    f.write(feature)
+                    f.write("\n")
+
+            # filter feature by al
+            with open(distance_folder_path + "filtered_features.txt", "a+") as f:
+                for feature in feature_ops_dict[distance_folder]:
+                    if feature not in black_list and feature not in cur_distance_filter_features and len(feature_ops_dict[distance_folder][feature]) > threshold_among_each_kind_of_operation * count_of_op:
+                        f.write(feature)
+                        f.write("\n")
+                        cur_distance_filter_features.append(feature)
+                        feature_filter_by_general_list.append(feature)
+
         with open(dataset_path + "feature_static.json", "w") as f:
             f.write(json.dumps(feature_ops_dict, indent=4))
+
+        feature_filter_by_general_list = list(set(feature_filter_by_general_list))
 
         # record feature in black list
         with open(dataset_path + "filtered_features.txt", "w") as f:
             for feature in feature_filter_by_general_list:
                 f.write(feature)
                 f.write("\n")
-
-        # record feature by al
-        with open(dataset_path + "filtered_features.txt", "a+") as f:
-            for feature in feature_ops_dict:
-                if feature not in feature_filter_by_general_list and len(
-                        feature_ops_dict[feature]) >= threshold_among_each_kind_of_operation * count_of_op:
-                    f.write(feature)
-                    f.write("\n")
-                    feature_filter_by_general_list.append(feature)
 
         """
             ================================ module 3 ================================
@@ -711,6 +746,11 @@ def pre_parse(dataset_list: list):
                     get payload and payload pattern
         """
         mlog.log_func(mlog.LOG, "Start module 4: get payload from dataset and extract payload pattern")
+
+        # get phone and device ip
+        phone_device_ip_dict = get_phone_and_device_ip()
+        pd_dict = phone_device_ip_dict["devices"].copy()
+
         # get feature aggregation from each csv and static appearance time
         op_feature_pattern_dict = {}
         for distance_folder in all_packet_folder_list:
@@ -748,19 +788,24 @@ def pre_parse(dataset_list: list):
                             filter_condition = txt_line[-1].replace("\n", "")
                             pcap_file_name = txt_line[0].replace("\n", "")
                             key_file_name = pcap_file_name.split(".")[0] + ".txt"
-                            pcap_files[distance_folder] = [distance_folder_path + pcap_file_name,distance_folder_path + key_file_name]
+                            pcap_files[distance_folder] = [distance_folder_path + pcap_file_name, distance_folder_path + key_file_name, filter_condition]
                             if distance_folder == "remote":
                                 local_pcap = "_".join(pcap_file_name.split("_")[:-1]) + "_local.pcapng"
                                 local_key = "_".join(key_file_name.split("_")[:-1]) + "_local.txt"
-                                pcap_files["local"] = [dataset_path + "local/" + local_pcap, dataset_path + "local/" + local_key]
+                                local_filter = format_tools.get_wireshark_filter_by_timestamp(txt_line[1].replace("\n", ""), txt_line[2].replace("\n", "")) + " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict)
+                                pcap_files["local"] = [dataset_path + "local/" + local_pcap, dataset_path + "local/" + local_key, local_filter]
 
                         # get selected packet number
-                        cur_op_selected_features = op_selected_features_dict[operation]
+                        cur_op_selected_features = op_selected_features_dict[operation].copy()
+                        # convert pattern to str
+                        for pat_index in range(len(cur_op_selected_features)):
+                            cur_op_selected_features[pat_index] = "".join(cur_op_selected_features[pat_index])
+
                         selected_numbers_feature = {}
                         cur_op_csv_files = [
                             op_files.split(".")[0] + "_remote.csv",
                             op_files.split(".")[0] + "_local.csv",
-                        ]
+                            ]
 
                         # read csv file and get number_feature
                         for csv_file in cur_op_csv_files:
@@ -786,8 +831,9 @@ def pre_parse(dataset_list: list):
                                     if line[protocol_index] not in protocol_to_be_filtered:
                                         selected_numbers_feature[cur_csv_distance][line[req_number_index]] = cur_line_feature
                                         continue
-                                    if format_tools.pattern_matching(cur_line_feature, cur_op_selected_features):
-                                        cur_line_feature = "".join(cur_op_selected_features[format_tools.get_pattern_index_in_pattern_list(format_tools.pattern_matching(cur_line_feature, cur_op_selected_features), cur_op_selected_features)])
+                                    # if format_tools.pattern_matching(cur_line_feature, cur_op_selected_features):
+                                    #     cur_line_feature = format_tools.get_feature_pattern_str(cur_line_feature, cur_op_selected_features)
+                                    if cur_line_feature in cur_op_selected_features:
                                         if line[resp_number_index]:
                                             # add response number
                                             selected_numbers_feature[cur_csv_distance][line[resp_number_index]] = cur_line_feature
@@ -802,7 +848,7 @@ def pre_parse(dataset_list: list):
                             if not len(list(selected_numbers_feature[dist_index].keys())):
                                 continue
 
-                            pcap = pyshark.FileCapture(pcap_files[dist_index][0], display_filter=filter_condition, use_json=True,
+                            pcap = pyshark.FileCapture(pcap_files[dist_index][0], display_filter=pcap_files[dist_index][2], use_json=True,
                                                        override_prefs={'ssl.keylog_file': pcap_files[dist_index][1]})
                             for packet in pcap:
                                 str_number = str(packet.number)
@@ -821,12 +867,12 @@ def pre_parse(dataset_list: list):
                         feature_payloads_dict[key] = split_list_by_length(feature_payloads_dict[key])
                         if key not in feature_payloads_pattern:
                             feature_payloads_pattern[key] = []
-                        if "udp" not in key:
+                        if "udp" not in key and "tcp" not in key:
                             for len_split_payloads in feature_payloads_dict[key]:
                                 feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads))
                         else:
                             for len_split_payloads in feature_payloads_dict[key]:
-                                feature_payloads_pattern[key].append(format_tools.get_udp_payload_pattern(len_split_payloads))
+                                feature_payloads_pattern[key].append(format_tools.get_unreadable_payload_pattern(len_split_payloads))
 
                     op_feature_pattern_dict[distance_folder][user_pcap_txt][operation] = feature_payloads_pattern
 
@@ -993,7 +1039,8 @@ def get_new_op_class_for_response(database, new_pcapng_file_path, keylog_file_pa
     if op_name.split("|")[1] == "remote":
         corresponding_local_pcap_path = "/".join(new_pcapng_file_path.split("/")[:-2]) + "/local/" + "_".join(new_pcapng_file_path.split("/")[-1].split("_")[:-1]) + "_local.pcapng"
         corresponding_local_key_file_path = corresponding_local_pcap_path[:-6] + "txt"
-        pcap = pyshark.FileCapture(corresponding_local_pcap_path, display_filter=new_op_filter_expression,
+        local_filter_expressiong = format_tools.get_wireshark_filter_by_timestamp(start_time, end_time) + " and " + format_tools.generate_selected_expression_by_ip_list(pd_dict)
+        pcap = pyshark.FileCapture(corresponding_local_pcap_path, display_filter=local_filter_expressiong,
                                    override_prefs={'ssl.keylog_file': corresponding_local_key_file_path})
         local_header_features_dict_list = get_header_features(pcap, corresponding_local_pcap_path.split("/")[-1], dns_mapping,
                                                                save_csv_flag=False)
@@ -1299,7 +1346,7 @@ def get_new_op_class_for_response(database, new_pcapng_file_path, keylog_file_pa
                     new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_patterns_for_cases(new_feature_payload_dict[current_feature][each_len_list_index])
             else:
                 for each_len_list_index in range(len(new_feature_payload_dict[current_feature])):
-                    new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_udp_payload_pattern(new_feature_payload_dict[current_feature][each_len_list_index])
+                    new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_unreadable_payload_pattern(new_feature_payload_dict[current_feature][each_len_list_index])
 
             # add new feature pattern to pattern dict
             payload_pattern_dict[current_feature] = new_feature_payload_dict[current_feature]
@@ -1381,10 +1428,24 @@ if __name__ == "__main__":
 
     start_time = time.time()
     # pre_parse(["manual_dataset_1709359674"])
-    pre_parse(["double_wifi_dataset_1710416287"])
+    pre_parse(["double_wifi_dataset_1710843536"])
     # print(get_new_op_class_for_response("manual_dataset_1709359674", "manual_dataset_1708781404.pcapng", PACKET_ROOT_PATH + 'manual_dataset_1708781404/manual_dataset_1708781404.txt', "DCU1", 1708781573.2821207, 1708781577.2241092))
     # print(get_new_op_class_for_response("manual_dataset_1709359674", "manual_dataset_1708781404.pcapng", PACKET_ROOT_PATH + 'manual_dataset_1708781404/manual_dataset_1708781404.txt', "ADU1CWR", 1708781483.8227053, 1708781533.441152))
     end_time = time.time()
     print("time: ", end_time - start_time)
     print("============================")
+
+    # sele_condition = '(frame.time >= "2024-03-19 18:22:42" && frame.time <= "2024-03-19 18:22:47") and (ip.addr == 10.42.0.185) and ' + FILTER_CONDITION
+    # pcap_path = "/home/ubuntu1604/Desktop/logic_bug/learn_model/packets/double_wifi_dataset_1710843536/local/double_wifi_dataset_1710843536_local.pcapng"
+    # txt_path = "/home/ubuntu1604/Desktop/logic_bug/learn_model/packets/double_wifi_dataset_1710843536/local/double_wifi_dataset_1710843536_local.txt"
+    # pcap = pyshark.FileCapture(pcap_path, display_filter=sele_condition,
+    #                            use_json=True,
+    #                            override_prefs={'ssl.keylog_file': txt_path})
+    # for packet in pcap:
+    #     print("==========================")
+    #     print(packet.tcp.field_names)
+    #     # print(dir(packet.tcp))
+    #     if "payload" in packet.tcp.field_names:
+    #         print(str(packet.tcp.get_field("payload")))
+    # pcap.close()
 

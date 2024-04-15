@@ -3,11 +3,12 @@ import json
 from appium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.common import exceptions
+from appium.webdriver.common.touch_action import TouchAction
 import time
 import subprocess
 import signal
 
-from learn_model import packet_parser, get_ips
+from learn_model import get_ips
 from log import mlog
 from config import device_appium_config
 
@@ -61,13 +62,14 @@ class DeviceCls:
 
         self.frida_flag = frida_flag
         if frida_flag:
+            self._start_frida_server()
             self._write_frida_hook_bash()
             if not self.check_frida_server():
                 mlog.log_func(mlog.ERROR, "frida server is not start, please check and restart")
                 self._stop_appium_server()
                 exit(10)
             self._start_frida_hook()
-            time.sleep(5)
+            time.sleep(2)
 
         # test flag and other info
         self.update_act_flag = False
@@ -104,6 +106,11 @@ class DeviceCls:
             os.remove(fine_name)
             return False
 
+    def _start_frida_server(self, frida_server_path_on_android='/data/local/tmp/'):
+        mlog.log_func(mlog.LOG, f"Start frida server on phone <{self.DEVICE_NAME}>")
+        command = f"bash {self.SCRIPTS_FOLDER}frida_server.sh {self.UDID} start {frida_server_path_on_android}"
+        os.system(command)
+
     def _write_frida_hook_bash(self):
         with open(f"{self.SCRIPTS_FOLDER}/start_pinning_frida_script_{self.DEVICE_NAME}.bash", "w") as sc_file:
             sc_file.write("#!/bin/bash\n")
@@ -130,6 +137,10 @@ class DeviceCls:
                 command = "kill -9 " + porc_id
                 os.system('echo %s | sudo -S %s' % (self.admin_password, command))
         os.remove(fine_name)
+
+    def _stop_firda_server(self):
+        mlog.log_func(mlog.LOG, f"Stop frida server on phone <{self.DEVICE_NAME}>")
+        command = f"bash {self.SCRIPTS_FOLDER}frida_server.sh {self.UDID} shutdown fk"
 
     def _start_appium_server(self, path_to_appium):
         mlog.log_func(mlog.LOG, "Start appium service....")
@@ -166,7 +177,6 @@ class DeviceCls:
         mlog.log_dict_func(mlog.LOG, self.DEVICE_CONFIG_DICT_FOR_APPIUM)
 
         driver = webdriver.Remote(self.APPIUM_IP, self.DEVICE_CONFIG_DICT_FOR_APPIUM)
-
         self.driver = driver
 
     def start_driver_and_init(self):
@@ -179,6 +189,7 @@ class DeviceCls:
         mlog.log_func(mlog.LOG, f"Driver <{self.DEVICE_NAME}> quit")
         if self.frida_flag:
             self._stop_frida_hook()
+            self._stop_firda_server()
         self.driver.quit()
         self._stop_appium_server()
 
@@ -346,6 +357,22 @@ class DeviceCls:
 
         return True
 
+    def pull_to_refresh(self):
+        mlog.log_func(mlog.LOG, "Refresh at homepage")
+        # get window size
+        window_size = self.driver.get_window_size()
+        width = window_size['width']
+        height = window_size['height']
+
+        # define start point and end point
+        start_x = width / 2
+        start_y = height / 4
+        end_x = start_x
+        end_y = height * 3 / 4
+
+        self.driver.swipe(start_x, start_y, end_x, end_y, 500)
+        time.sleep(0.5)
+
     def set_packet_name(self, pcap_name):
         self.cur_packet_name = pcap_name
         self.cur_packet_folder = self.PACKET_ROOT_PATH + "_".join(self.cur_packet_name.split("_")[:-1]) + "/" + self.cur_packet_name.split("_")[-1][:-7] + "/"
@@ -354,7 +381,29 @@ class DeviceCls:
 
 if __name__ == "__main__":
     # pixel7_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel7", "user1", frida_flag=True)
-    pixel62_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel6-2", "user2", distance="local",frida_flag=False)
-    pixel62_entity.start_driver()
-    pixel62_entity.click_button("user2|local|DeviceControl")
+    pixel62_entity = DeviceCls("20230920183445_com.huawei.smarthome", "pixel6-2", "user2", distance="local", frida_flag=False)
+    pixel62_entity.start_driver_and_init()
 
+
+    def pull_to_refresh(driver):
+        # 获取屏幕尺寸
+        window_size = driver.get_window_size()
+        width = window_size['width']
+        height = window_size['height']
+
+        # 定义滑动起始点和终点
+        # define start point and end point
+        start_x = width / 2
+        start_y = height / 4
+        end_x = start_x
+        end_y = height * 3 / 4
+
+        driver.swipe(start_x, start_y, end_x, end_y, 500)
+
+    try:
+        pull_to_refresh(pixel62_entity.driver)
+        pixel62_entity.click_button("user2|local|DeviceControl")
+    except:
+        print("Error")
+
+    pixel62_entity.stop_driver_and_appium_server()
