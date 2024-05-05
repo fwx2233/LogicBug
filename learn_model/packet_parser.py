@@ -364,7 +364,7 @@ def get_url_pattern(dataset, threshold=0.5) -> dict:
     # get uri pattern
     for domain in result_dict.keys():
         for key, uri_list in result_dict[domain].items():
-            new_pattern_list = format_tools.get_patterns_for_cases(uri_list)
+            new_pattern_list = format_tools.get_readable_patterns_for_cases(uri_list)
             record_flag = False
             for pattern_index in range(len(new_pattern_list)):
                 pattern_str = "".join(new_pattern_list[pattern_index])
@@ -867,12 +867,14 @@ def pre_parse(dataset_list: list):
                         feature_payloads_dict[key] = split_list_by_length(feature_payloads_dict[key])
                         if key not in feature_payloads_pattern:
                             feature_payloads_pattern[key] = []
-                        if "udp" not in key and "tcp" not in key:
-                            for len_split_payloads in feature_payloads_dict[key]:
-                                feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads))
-                        else:
-                            for len_split_payloads in feature_payloads_dict[key]:
-                                feature_payloads_pattern[key].append(format_tools.get_unreadable_payload_pattern(len_split_payloads))
+                        # if "udp" not in key and "tcp" not in key:
+                        #     for len_split_payloads in feature_payloads_dict[key]:
+                        #         feature_payloads_pattern[key].append(format_tools.get_readable_patterns_for_cases(len_split_payloads))
+                        # else:
+                        #     for len_split_payloads in feature_payloads_dict[key]:
+                        #         feature_payloads_pattern[key].append(format_tools.get_unreadable_payload_pattern(len_split_payloads))
+                        for len_split_payloads in feature_payloads_dict[key]:
+                            feature_payloads_pattern[key].append(format_tools.get_patterns_for_cases(len_split_payloads, format_tools.is_raw_data(key)))
 
                     op_feature_pattern_dict[distance_folder][user_pcap_txt][operation] = feature_payloads_pattern
 
@@ -916,7 +918,7 @@ def pre_parse(dataset_list: list):
                                     not_in_feature_list.append((operation, click_item, feature))
                                     continue
                                 for each_len_patterns_list in op_feature_pattern_dict[distance_folder][user_pcap_txt][operation][feature]:
-                                    matched_pattern = format_tools.pattern_matching(features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature][index], each_len_patterns_list, "udp" in feature)
+                                    matched_pattern = format_tools.pattern_matching(features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature][index], each_len_patterns_list, "udp" in feature or "tcp" in feature)
                                     if matched_pattern:
                                         features_occur_for_each_time_dict[distance_folder][user_pcap_txt][operation][click_item][feature][index] = "".join(matched_pattern)
                                         break
@@ -1341,12 +1343,12 @@ def get_new_op_class_for_response(database, new_pcapng_file_path, keylog_file_pa
 
         # get pattern for new features
         for current_feature in new_feature_payload_dict:
-            if "udp" not in current_feature:
-                for each_len_list_index in range(len(new_feature_payload_dict[current_feature])):
-                    new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_patterns_for_cases(new_feature_payload_dict[current_feature][each_len_list_index])
-            else:
-                for each_len_list_index in range(len(new_feature_payload_dict[current_feature])):
-                    new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_unreadable_payload_pattern(new_feature_payload_dict[current_feature][each_len_list_index])
+            # if "udp" not in current_feature:
+            #     for each_len_list_index in range(len(new_feature_payload_dict[current_feature])):
+            #         new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_readable_patterns_for_cases(new_feature_payload_dict[current_feature][each_len_list_index])
+            # else:
+            for each_len_list_index in range(len(new_feature_payload_dict[current_feature])):
+                new_feature_payload_dict[current_feature][each_len_list_index] = format_tools.get_patterns_for_cases(new_feature_payload_dict[current_feature][each_len_list_index], format_tools.is_raw_data(current_feature))
 
             # add new feature pattern to pattern dict
             payload_pattern_dict[current_feature] = new_feature_payload_dict[current_feature]
